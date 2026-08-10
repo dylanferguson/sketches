@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Game of Life</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --background: #f5f5f2;
+        --stage-inner: rgba(255, 255, 255, 0.32);
+        --stage-middle: rgba(255, 255, 255, 0.1);
+        --wash: rgba(245, 245, 242, 0.62);
+        --edge: rgba(245, 245, 242, 0.48);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #000;
+          --stage-inner: rgba(255, 255, 255, 0.045);
+          --stage-middle: rgba(255, 255, 255, 0.015);
+          --wash: rgba(0, 0, 0, 0.62);
+          --edge: rgba(0, 0, 0, 0.45);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        background: var(--background);
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(
+          circle at 50% 52%,
+          var(--stage-inner),
+          var(--stage-middle) 34%,
+          transparent 62%
+        );
+        content: "";
+        pointer-events: none;
+      }
+
+      body::after {
+        position: fixed;
+        z-index: 1;
+        inset: -50%;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 160px 160px;
+        content: "";
+        opacity: 0.1;
+        pointer-events: none;
+        animation: grain 0.9s steps(1) infinite;
+      }
+
+      canvas {
+        position: fixed;
+        z-index: 0;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+        touch-action: none;
+        user-select: none;
+        animation: scene-in 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+        -webkit-user-select: none;
+      }
+
+      .vignette {
+        position: fixed;
+        z-index: 2;
+        inset: 0;
+        background: var(--wash);
+        box-shadow: inset 0 0 160px 10px var(--edge);
+        pointer-events: none;
+      }
+
+      @keyframes grain {
+        0%,
+        100% {
+          transform: translate(0, 0);
+        }
+        10% {
+          transform: translate(-1.6%, -2.4%);
+        }
+        20% {
+          transform: translate(-3.1%, 1.7%);
+        }
+        30% {
+          transform: translate(2.3%, -3.3%);
+        }
+        40% {
+          transform: translate(-2.6%, 3.1%);
+        }
+        50% {
+          transform: translate(-1.4%, 0.8%);
+        }
+        60% {
+          transform: translate(3.2%, 0.4%);
+        }
+        70% {
+          transform: translate(0.6%, 2.6%);
+        }
+        80% {
+          transform: translate(1.8%, -1.5%);
+        }
+        90% {
+          transform: translate(-3.4%, 2.2%);
+        }
+      }
+
+      @keyframes scene-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        canvas,
+        body::after {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene" role="img" aria-label="Conway's Game of Life"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+    <script>
+      // Conway's Game of Life rendered as a grayscale glow across the whole
+      // viewport. Cells don't snap on and off —
+      // brightness eases toward alive/dead, so births bloom in and deaths
+      // fade out like film. Edges are dead (no wrap). When the soup settles
+      // into still lifes / a few blinkers (little changes for a few ticks)
+      // or thins right out, a fresh soup crossfades in over the old one, so
+      // the field never freezes. Drag to paint new life.
+      function initLife(canvas) {
+        const CELL = 15; // logical px per cell
+        const STEP_MS = 140; // one generation every ~7fps
+        const DENSITY = 0.3; // initial fill fraction
+
+        // Entrance: the opening soup blooms outward from the centre rather
+        // than all at once — a cell fades in once the expanding wavefront
+        // (REVEAL_SPREAD seconds to reach the edge) passes over it.
+        const REVEAL_SPREAD = 0.55;
+        const REVEAL_RAMP = 0.5;
+        const REVEAL_JIT = 0.14;
+
+        canvas.setAttribute("aria-label", "Conway's Game of Life");
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const ctx = canvas.getContext("2d");
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+        // Deterministic hash in [0, 1).
+        function hashD(a, b) {
+          const h = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+          return h - Math.floor(h);
+        }
+
+        // Grid geometry is rebuilt from the viewport size, so the field
+        // covers whatever shape the window is.
+        let W, H, COLS, ROWS, N;
+        let grid, next, bri, jitter, hist2, flash, delay;
+        let startTime = performance.now();
+        const revealDur = REVEAL_SPREAD + REVEAL_JIT + REVEAL_RAMP;
+
+        function seed() {
+          for (let i = 0; i < N; i++) grid[i] = Math.random() < DENSITY ? 1 : 0;
+        }
+
+        // Sprinkle fresh cells across the whole board — a gentle kick that
+        // re-animates a settled field without wiping its structures.
+        function kick() {
+          for (let i = 0; i < N; i++) if (Math.random() < 0.045) grid[i] = 1;
+        }
+
+        function resize() {
+          W = canvas.clientWidth;
+          H = canvas.clientHeight;
+          canvas.width = Math.round(W * dpr);
+          canvas.height = Math.round(H * dpr);
+          COLS = Math.ceil(W / CELL);
+          ROWS = Math.ceil(H / CELL);
+          N = COLS * ROWS;
+          grid = new Uint8Array(N);
+          next = new Uint8Array(N);
+          hist2 = new Uint8Array(N); // board two generations ago, for stall detection
+          bri = new Float32Array(N); // eased brightness — starts dark, fades in
+          flash = new Float32Array(N); // birth bloom — spikes on birth, then decays
+          jitter = new Float32Array(N); // static per-cell brightness variation
+          delay = new Float32Array(N); // per-cell entrance delay, centre-out
+          const ccx = (COLS - 1) / 2;
+          const ccy = (ROWS - 1) / 2;
+          const maxD = Math.hypot(ccx, ccy) || 1;
+          for (let i = 0; i < N; i++) {
+            const x = i % COLS;
+            const y = (i / COLS) | 0;
+            jitter[i] = 0.8 + 0.2 * hashD(x + 1, y + 1);
+            const d = Math.hypot(x - ccx, y - ccy) / maxD;
+            delay[i] = d * REVEAL_SPREAD + REVEAL_JIT * hashD(x + 3, y + 7);
+          }
+          seed();
+          hist2.set(grid);
+          startTime = performance.now();
+        }
+
+        // Advance one generation (B3/S23), dead beyond the edges. Returns the
+        // new population.
+        function step() {
+          let pop = 0;
+          for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+              const idx = y * COLS + x;
+              let n = 0;
+              for (let dy = -1; dy <= 1; dy++) {
+                const ny = y + dy;
+                if (ny < 0 || ny >= ROWS) continue;
+                for (let dx = -1; dx <= 1; dx++) {
+                  if (!dx && !dy) continue;
+                  const nx = x + dx;
+                  if (nx < 0 || nx >= COLS) continue;
+                  n += grid[ny * COLS + nx];
+                }
+              }
+              const alive = grid[idx] ? n === 2 || n === 3 : n === 3;
+              next[idx] = alive ? 1 : 0;
+              // flare a cell as it's born; clear the flare when it dies so it
+              // doesn't leave a lingering ghost behind
+              if (alive && !grid[idx]) flash[idx] = 1;
+              else if (!alive && grid[idx]) flash[idx] = 0;
+              pop += next[idx];
+            }
+          }
+          const t = grid;
+          grid = next;
+          next = t;
+          return pop;
+        }
+
+        // True when the whole board matches its state two generations back —
+        // i.e. everything left is a still life (period 1) or a period-2
+        // oscillator. Gliders and chaotic regions never match, so this fires
+        // only once the field has genuinely gone quiet.
+        function stalled() {
+          for (let i = 0; i < N; i++) if (grid[i] !== hist2[i]) return false;
+          return true;
+        }
+
+        // Ease brightness toward each cell's alive/dead target — turning
+        // discrete generations into a continuous, breathing image — and decay
+        // the birth-bloom spikes. During the opening, the alive target is
+        // gated by the centre-out wavefront so the field blooms into being.
+        function ease(dt, elapsed) {
+          const k = 1 - Math.exp(-11 * dt);
+          const fk = Math.exp(-5 * dt);
+          const revealing = elapsed < revealDur;
+          for (let i = 0; i < N; i++) {
+            flash[i] *= fk;
+            let target = grid[i] ? 1 : 0;
+            if (revealing && target) {
+              const g = (elapsed - delay[i]) / REVEAL_RAMP;
+              target = g <= 0 ? 0 : g < 1 ? g : 1;
+            }
+            bri[i] += (target - bri[i]) * k;
+          }
+        }
+
+        // Each live cell is a soft dot with a faint halo.
+        function render() {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, W, H);
+          const base = CELL * 0.34;
+          const ink = prefersDark.matches ? 255 : 0;
+          for (let i = 0; i < N; i++) {
+            const b = bri[i];
+            const f = flash[i];
+            if (b < 0.02 && f < 0.02) continue;
+            const px = ((i % COLS) + 0.5) * CELL;
+            const py = (((i / COLS) | 0) + 0.5) * CELL;
+            // newborns flare briefly — a little larger, with a brighter halo —
+            // then settle to a steady matte dot, so the field reads as light
+            const r = base * (0.55 + 0.45 * b) * (1 + 0.4 * f);
+            const haloA = (0.09 + 0.24 * f) * Math.max(b, 0.45 * f);
+            const glow = ctx.createRadialGradient(px, py, r * 0.5, px, py, r * 3.4);
+            glow.addColorStop(0, `rgba(${ink},${ink},${ink},${haloA})`);
+            glow.addColorStop(1, `rgba(${ink},${ink},${ink},0)`);
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(px, py, r * 3.4, 0, Math.PI * 2);
+            ctx.fill();
+            const coreA = Math.min(0.96, b * jitter[i] + 0.3 * f);
+            ctx.fillStyle = `rgba(${ink},${ink},${ink},${coreA})`;
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Drag to paint: light up the cell under the pointer and a loose
+        // scatter around it, so a stroke seeds new activity.
+        function paintAt(clientX, clientY) {
+          const rect = canvas.getBoundingClientRect();
+          const gx = Math.floor(((clientX - rect.left) / rect.width) * COLS);
+          const gy = Math.floor(((clientY - rect.top) / rect.height) * ROWS);
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = gx + dx;
+              const ny = gy + dy;
+              if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+              if (Math.abs(dx) + Math.abs(dy) <= 1 || Math.random() < 0.5) {
+                grid[ny * COLS + nx] = 1;
+              }
+            }
+          }
+        }
+
+        let drawing = false;
+        canvas.addEventListener("pointerdown", (e) => {
+          drawing = true;
+          paintAt(e.clientX, e.clientY);
+          canvas.setPointerCapture(e.pointerId);
+        });
+        canvas.addEventListener("pointermove", (e) => {
+          if (drawing) paintAt(e.clientX, e.clientY);
+        });
+        const endDraw = () => {
+          drawing = false;
+        };
+        canvas.addEventListener("pointerup", endDraw);
+        canvas.addEventListener("pointercancel", endDraw);
+
+        resize();
+        // Rebuild the grid when the window changes size (debounced).
+        let resizeT = 0;
+        window.addEventListener("resize", () => {
+          clearTimeout(resizeT);
+          resizeT = setTimeout(resize, 200);
+        });
+
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (reduced) {
+          for (let i = 0; i < 12; i++) step();
+          for (let i = 0; i < N; i++) {
+            bri[i] = grid[i] ? 1 : 0;
+            flash[i] = 0;
+          }
+          render();
+          return;
+        }
+
+        let raf = 0;
+        let last = performance.now();
+        let acc = 0;
+        function loop() {
+          const now = performance.now();
+          const dtMs = now - last;
+          last = now;
+          acc += dtMs;
+          while (acc >= STEP_MS) {
+            acc -= STEP_MS;
+            const pop = step();
+            // Once the field goes quiet (or nearly dies out), stir it back to
+            // life. A fresh soup on near-death, a sprinkle otherwise — then
+            // reset history so the kick isn't immediately read as a stall.
+            if (pop < N * 0.01) {
+              seed();
+              hist2.set(grid);
+            } else if (stalled()) {
+              kick();
+              hist2.set(grid);
+            } else {
+              hist2.set(next); // next holds the previous generation
+            }
+          }
+          ease(Math.min(0.1, dtMs / 1000), (now - startTime) / 1000);
+          render();
+          raf = requestAnimationFrame(loop);
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") {
+            cancelAnimationFrame(raf);
+          } else {
+            last = performance.now();
+            acc = 0;
+            raf = requestAnimationFrame(loop);
+          }
+        });
+        raf = requestAnimationFrame(loop);
+      }
+
+      initLife(document.getElementById("scene"));
+    </script>
+  </body>
+</html>
