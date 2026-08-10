@@ -6,7 +6,7 @@ setup:
 	mise install
 
 dev:
-	cd sketches && mise exec -- bun */index.html --console
+	cd sketches && mise exec -- bun index.html */index.html --console
 
 format:
 	$(OXFMT) --write README.md 'sketches/**/*.html'

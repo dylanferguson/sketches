@@ -10,6 +10,8 @@ make dev
 
 The Bun development server provides hot reload at <http://localhost:3000>.
 
+The sketches are published at <https://dylanferguson.github.io/sketches/>.
+
 Format the files or check their formatting with Oxfmt:
 
 ```sh
