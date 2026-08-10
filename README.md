@@ -1,7 +1,7 @@
 # Sketches
 
-Small, self-contained browser experiments. Each sketch is one `index.html`
-file and uses CDN resources when needed.
+Small, self-contained browser experiments. Each directory under `sketches/`
+contains one `index.html` file and uses CDN resources when needed.
 
 ```sh
 make setup

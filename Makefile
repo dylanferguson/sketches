@@ -6,10 +6,10 @@ setup:
 	mise install
 
 dev:
-	mise exec -- bun */index.html --console
+	cd sketches && mise exec -- bun */index.html --console
 
 format:
-	$(OXFMT) --write README.md '**/*.html'
+	$(OXFMT) --write README.md 'sketches/**/*.html'
 
 check:
-	$(OXFMT) --check README.md '**/*.html'
+	$(OXFMT) --check README.md 'sketches/**/*.html'
