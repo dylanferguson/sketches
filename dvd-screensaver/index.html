@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="user-scalable=yes, width=device-width" />
+    <title>Bouncing DVD Logo</title>
+    <style type="text/css">
+      body {
+        margin: 0;
+        height: 100vh;
+        background-color: hsl(0, 0%, 0%);
+      }
+
+      .logo {
+        position: fixed;
+        width: 18vw;
+        min-width: 10rem;
+      }
+
+      .logo > div {
+        animation: x 5s linear infinite alternate;
+      }
+
+      .logo > div > div {
+        animation: y 3s linear infinite alternate;
+      }
+    </style>
+    <style type="text/css" id="keyframes"></style>
+  </head>
+
+  <body>
+    <main>
+      <div class="logo">
+        <div>
+          <div>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 94">
+              <path
+                stroke="null"
+                d="M119.43 16.34S105 34.08 105.74 35.2c1.03-1.13-5.17-19.07-5.17-19.07S99.28 12.36 95.23 0H18l-2.68 11.6h25.05c13.02 0 20.97 5.39 18.74 14.93-2.4 10.38-13.75 14.81-25.85 14.81h-4.53l5.82-25.38H14.3L5.72 53.04h28.73c21.61 0 42.12-11.6 45.82-26.52.64-2.73.55-9.63-1.1-13.69 0-.1-.1-.28-.2-.55-.08-.1-.19-.76.2-.86.17-.1.55.28.55.38 0 0 .18.48.37.85L98.35 65.4l46.55-53.7 19.67-.1h4.8c13.03 0 21.08 5.38 18.85 14.92-2.4 10.38-13.84 14.8-25.95 14.8h-4.62l5.92-25.36h-20.23l-8.6 37.08h28.73c21.61 0 42.31-11.6 45.72-26.52C212.7 11.62 197.55 0 175.76 0h-42.85c-11.37 13.68-13.48 16.34-13.48 16.34v-.01h0zM99 65.59c-54.67 0-99 6.42-99 14.34s44.33 14.36 99 14.36c54.77 0 99.12-6.41 99.12-14.34S153.77 65.6 99 65.6v-.02h0zm-3.5 19.44c-12.56 0-22.63-2.17-22.63-4.82 0-2.63 10.07-4.8 22.63-4.8 12.46 0 22.54 2.16 22.54 4.81 0 2.64-10.07 4.82-22.54 4.82h0z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+  <script>
+    /**
+     * source: https://gist.github.com/mjackson/5311256
+     *
+     * Converts an HSV color value to RGB. Conversion formula
+     * adapted from http://en.wikipedia.org/wiki/HSV_color_space.
+     * Assumes h, s, and v are contained in the set [0, 1] and
+     * returns r, g, and b in the set [0, 255].
+     *
+     * @param   Number  h       The hue
+     * @param   Number  s       The saturation
+     * @param   Number  v       The value
+     * @return  Array           The RGB representation
+     */
+    const hsvToRgb = (h, s, v) => {
+      var r, g, b;
+
+      var i = Math.floor(h * 6);
+      var f = h * 6 - i;
+      var p = v * (1 - s);
+      var q = v * (1 - f * s);
+      var t = v * (1 - (1 - f) * s);
+
+      switch (i % 6) {
+        case 0:
+          ((r = v), (g = t), (b = p));
+          break;
+        case 1:
+          ((r = q), (g = v), (b = p));
+          break;
+        case 2:
+          ((r = p), (g = v), (b = t));
+          break;
+        case 3:
+          ((r = p), (g = q), (b = v));
+          break;
+        case 4:
+          ((r = t), (g = p), (b = v));
+          break;
+        case 5:
+          ((r = v), (g = p), (b = q));
+          break;
+      }
+
+      return [r * 255, g * 255, b * 255];
+    };
+
+    const generateRandomColour = () => {
+      const goldenRatioConjugate = 0.618033988749895;
+      const h = (Math.random() + goldenRatioConjugate) % 1;
+      const colour = hsvToRgb(h, 0.3, 0.99);
+      return `rgb(${colour.join(",")})`;
+    };
+
+    const keyframesStyles = document.querySelector("style#keyframes");
+    const updateKeyframes = (width, height) => {
+      keyframesStyles.textContent = `
+        @keyframes x {
+          from { transform: translateX(0); }
+          to { transform: translateX(calc(100vw - ${width}px)); }
+        }
+
+        @keyframes y {
+          from { transform: translateY(0); }
+          to { transform: translateY(calc(100vh - ${height}px)); }
+        }`;
+    };
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        updateKeyframes(entry.target.offsetWidth, entry.target.offsetHeight);
+      }
+    });
+
+    const container = document.querySelector(".logo");
+    const logo = document.querySelector("svg");
+    const style = document.querySelector("style");
+    const outer = container.firstElementChild;
+    const inner = outer.firstElementChild;
+    const changeLogoColour = () => {
+      logo.style.fill = generateRandomColour();
+    };
+
+    updateKeyframes(container.offsetWidth, container.offsetHeight);
+    outer.addEventListener("animationiteration", changeLogoColour);
+    inner.addEventListener("animationiteration", changeLogoColour);
+    changeLogoColour();
+    resizeObserver.observe(container);
+  </script>
+</html>

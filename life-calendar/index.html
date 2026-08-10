@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="user-scalable=yes, width=device-width" />
+    <title>Life Calendar</title>
+    <style type="text/css">
+      :root {
+        --black: rgb(0, 0, 0);
+        --gray: rgba(23, 23, 23, 0.15);
+        --gradient: linear-gradient(to right, #c6ffdd, #fbd786, #f7797d);
+      }
+
+      body {
+        padding: 40px 20px 200px 0;
+        max-width: 1000px;
+        margin: 0 auto;
+        font-family:
+          "Gill Sans",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif,
+          "Apple Color Emoji",
+          "Segoe UI Emoji",
+          "Segoe UI Symbol";
+
+        color: var(--black);
+        /* background: var(--gradient); */
+      }
+
+      h1 {
+        text-align: center;
+        text-transform: uppercase;
+        font-weight: 600;
+        opacity: 0;
+      }
+
+      .num {
+        font-size: 10px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(54, 1fr);
+        grid-template-rows: 1fr;
+        grid-gap: 3px;
+      }
+
+      .square {
+        border: 1px solid var(--black);
+        width: calc(100% - 1px);
+        height: 0;
+        padding-bottom: calc(100% - 1px);
+      }
+
+      .passed {
+        background-color: var(--gray);
+      }
+
+      @media print {
+        .passed {
+          background-color: none;
+        }
+      }
+
+      .gap {
+        grid-column: span 2;
+      }
+
+      .weekText,
+      .yearText {
+        font-size: 12px;
+        letter-spacing: 1px;
+        font-variant: small-caps;
+      }
+
+      .weekText {
+        grid-column: 3 / -1;
+      }
+
+      .yearText {
+        grid-row: 3 / span 83;
+        writing-mode: vertical-lr;
+        transform: rotate(180deg);
+        text-align: right;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Life Calendar</h1>
+    <div class="grid">
+      <div class="weekText">week of the year ⟶</div>
+      <div class="yearText">⟵ year of your life</div>
+      <div class="gap"></div>
+    </div>
+    <script type="text/javascript">
+      const searchParams = new URL(document.location).searchParams;
+      const dob = searchParams.has("dob")
+        ? new Date(
+            ...searchParams
+              .get("dob")
+              .split("/")
+              .reverse()
+              .map((x) => Number(x))
+              .map((x, i) => (i === 1 ? x - 1 : x)),
+          )
+        : new Date(1994, 3, 8);
+      const weeksOfLife =
+        (searchParams.has("week") && Number(searchParams.get("weeks"))) ||
+        (searchParams.has("years") && Math.floor(Number(searchParams.get("years")) * 52)) ||
+        72 * 52;
+
+      const weeksSinceBirth =
+        Math.round((new Date() - dob) / (7 * 24 * 60 * 60 * 1000)) +
+        new Date().getFullYear() -
+        dob.getFullYear();
+      console.log(weeksSinceBirth, Math.round((new Date() - dob) / (7 * 24 * 60 * 60 * 1000)));
+      const gridElement = document.querySelector(".grid");
+      const lowerRows = [];
+      const weekOfTheYearRow = Array.from(new Array(52), (val, index) => index + 1)
+        .map((n) => `<div class="num">${n}</div>`)
+        .join("");
+
+      for (let i = 0; i < weeksOfLife + Math.ceil(weeksOfLife / 52); i++) {
+        if (i % 53 === 0) {
+          lowerRows.push(`<div class="num">${i / 53}</div>`);
+        } else {
+          lowerRows.push(`<div class="square ${i < weeksSinceBirth ? "passed" : null}"></div>`);
+        }
+      }
+
+      gridElement.innerHTML += weekOfTheYearRow + lowerRows.join("");
+    </script>
+  </body>
+</html>

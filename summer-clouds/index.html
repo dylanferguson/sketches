@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#159fd6" />
+    <meta name="description" content="Slowly passing, ever-changing Japanese summer clouds." />
+    <meta name="robots" content="noindex" />
+    <title>Summer Clouds</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #sky {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        --sky-background: #159fd6;
+        --sky-filter: hue-rotate(-22deg) saturate(4) contrast(1.04);
+        background: var(--sky-background);
+        transition: background 1800ms ease;
+      }
+
+      body[data-mode="sunset"] {
+        --sky-background: #617990;
+        --sky-filter: hue-rotate(-2deg) saturate(1.6) contrast(1.05) brightness(1.01);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        filter: var(--sky-filter);
+        transition: filter 1800ms ease;
+      }
+
+      #mode-toggle {
+        position: fixed;
+        z-index: 2;
+        right: max(18px, env(safe-area-inset-right));
+        bottom: max(18px, env(safe-area-inset-bottom));
+        display: grid;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.48);
+        border-radius: 50%;
+        background: rgba(25, 91, 128, 0.16);
+        box-shadow: 0 2px 14px rgba(10, 49, 73, 0.12);
+        cursor: pointer;
+        opacity: 0.34;
+        transition:
+          opacity 200ms ease,
+          background 1200ms ease,
+          border-color 1200ms ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #mode-toggle:hover,
+      #mode-toggle:focus-visible {
+        opacity: 1;
+      }
+
+      #mode-toggle:focus-visible {
+        outline: 2px solid white;
+        outline-offset: 3px;
+      }
+
+      #mode-toggle span {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #fff4c8;
+        box-shadow: 0 0 0 3px rgba(255, 244, 200, 0.24);
+        transition:
+          background 1200ms ease,
+          box-shadow 1200ms ease;
+      }
+
+      body[data-mode="sunset"] #mode-toggle {
+        border-color: rgba(255, 218, 200, 0.5);
+        background: rgba(73, 73, 112, 0.2);
+      }
+
+      body[data-mode="sunset"] #mode-toggle span {
+        background: #ffab7d;
+        box-shadow: 0 0 0 3px rgba(255, 171, 125, 0.25);
+      }
+
+      #status {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: rgba(255, 255, 255, 0.72);
+        font:
+          10px/1 ui-monospace,
+          "SFMono-Regular",
+          Consolas,
+          monospace;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        transition: opacity 600ms ease;
+        pointer-events: none;
+      }
+
+      #status.ready {
+        opacity: 0;
+      }
+
+      #status.error {
+        padding: 2rem;
+        font-size: 12px;
+        line-height: 1.6;
+        letter-spacing: normal;
+        text-align: center;
+        text-transform: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="sky" aria-label="Japanese summer sky"></main>
+    <div id="status" role="status" aria-live="polite">Forming clouds</div>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@19.2.8",
+          "react/jsx-runtime": "https://esm.sh/react@19.2.8/jsx-runtime",
+          "react-dom": "https://esm.sh/react-dom@19.2.8?external=react",
+          "react-dom/client": "https://esm.sh/react-dom@19.2.8/client?external=react",
+          "three": "https://esm.sh/three@0.184.0",
+          "three/": "https://esm.sh/three@0.184.0/",
+          "@react-three/fiber": "https://esm.sh/@react-three/fiber@9.7.0?external=react,react-dom,three",
+          "@react-three/drei": "https://esm.sh/@react-three/drei@10.7.8?external=react,react-dom,three,@react-three/fiber",
+          "postprocessing": "https://esm.sh/postprocessing@6.39.4?external=three",
+          "@react-three/postprocessing": "https://esm.sh/@react-three/postprocessing@3.0.4?external=react,three,@react-three/fiber,postprocessing",
+          "@takram/three-geospatial": "https://esm.sh/@takram/three-geospatial@0.9.1?external=react,three,@react-three/fiber",
+          "@takram/three-geospatial/shaders": "https://esm.sh/@takram/three-geospatial@0.9.1/shaders?external=react,three,@react-three/fiber",
+          "@takram/three-geospatial/webgpu": "https://esm.sh/@takram/three-geospatial@0.9.1/webgpu?external=react,three,@react-three/fiber",
+          "@takram/three-atmosphere": "https://esm.sh/@takram/three-atmosphere@0.19.1?external=react,three,@react-three/fiber,@react-three/drei,@react-three/postprocessing,postprocessing,@takram/three-geospatial",
+          "@takram/three-atmosphere/r3f": "https://esm.sh/@takram/three-atmosphere@0.19.1/r3f?external=react,three,@react-three/fiber,@react-three/drei,@react-three/postprocessing,postprocessing,@takram/three-geospatial",
+          "@takram/three-atmosphere/shaders/bruneton": "https://esm.sh/@takram/three-atmosphere@0.19.1/shaders/bruneton?external=react,three,@react-three/fiber,@react-three/drei,@react-three/postprocessing,postprocessing,@takram/three-geospatial",
+          "@takram/three-clouds/r3f": "https://esm.sh/@takram/three-clouds@0.7.6/r3f?external=react,three,@react-three/fiber,@react-three/postprocessing,postprocessing,@takram/three-atmosphere,@takram/three-geospatial"
+        }
+      }
+    </script>
+    <script type="module" src="https://esm.sh/tsx"></script>
+    <script type="text/babel">
+      import React, { Suspense, useEffect, useMemo, useState } from "react";
+      import { createRoot } from "react-dom/client";
+      import * as THREE from "three";
+      import { Canvas, useThree } from "@react-three/fiber";
+      import { Bloom, EffectComposer, ToneMapping } from "@react-three/postprocessing";
+      import { BlendFunction, Effect, ToneMappingMode } from "postprocessing";
+      import { AerialPerspective, Atmosphere } from "@takram/three-atmosphere/r3f";
+      import { CloudLayer, Clouds } from "@takram/three-clouds/r3f";
+
+      const container = document.querySelector("#sky");
+      const status = document.querySelector("#status");
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const modes = {
+        day: {
+          date: Date.parse("2026-08-08T03:30:00Z"),
+          exposure: 5.5,
+        },
+        sunset: {
+          date: Date.parse("2026-08-08T08:58:00Z"),
+          exposure: 8.45,
+        },
+      };
+
+      const requestedMode = new URLSearchParams(location.search).get("mode");
+      const initialMode = requestedMode === "sunset" ? "sunset" : "day";
+      document.body.dataset.mode = initialMode;
+
+      // Keep the art-directed macro weather region fixed: the source map contains
+      // large overcast zones. Randomizing the two 3D noise fields still produces a
+      // fresh formation on every visit without changing the tuned amount of sky.
+      const randomCloudStart = {
+        shapeOffset: [Math.random(), Math.random(), Math.random()],
+        shapeDetailOffset: [Math.random(), Math.random(), Math.random()],
+      };
+
+      function showError(error) {
+        console.error(error);
+        status.className = "error";
+        status.innerHTML = "The clouds could not form.<br>Please try a current browser.";
+      }
+
+      addEventListener("error", (event) => showError(event.error ?? event.message));
+      addEventListener("unhandledrejection", (event) => showError(event.reason));
+
+      // Start with the renderer's documented Earth-centred camera, rotate it east to
+      // central Japan, then tilt upward until the frame contains only sky.
+      const cameraSetup = new THREE.PerspectiveCamera(58, 1, 1, 400000);
+      cameraSetup.position.set(4529893.894855564, 2615333.425024031, 3638042.815326614);
+      cameraSetup.rotation.set(0.6423512931563148, -0.2928348796035058, -0.8344824769956042);
+      const japanRotation = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 0, 1),
+        THREE.MathUtils.degToRad(106),
+      );
+      cameraSetup.position.applyQuaternion(japanRotation);
+      cameraSetup.quaternion.premultiply(japanRotation);
+      cameraSetup.rotateX(THREE.MathUtils.degToRad(43));
+
+      const cameraPosition = cameraSetup.position.toArray();
+      const cameraRotation = [
+        cameraSetup.rotation.x,
+        cameraSetup.rotation.y,
+        cameraSetup.rotation.z,
+      ];
+
+      function Ready() {
+        useEffect(() => {
+          status.classList.add("ready");
+        }, []);
+        return null;
+      }
+
+      function Exposure({ value }) {
+        const renderer = useThree(({ gl }) => gl);
+
+        useEffect(() => {
+          renderer.toneMappingExposure = value;
+        }, [renderer, value]);
+
+        return null;
+      }
+
+      const sunsetGradeShader = /* glsl */ `
+        void mainImage(
+          const in vec4 inputColor,
+          const in vec2 uv,
+          out vec4 outputColor
+        ) {
+          vec3 color = inputColor.rgb;
+          float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+          float warmth = smoothstep(-0.015, 0.06, color.r - color.b);
+          float highlight = smoothstep(0.35, 0.67, luminance);
+          float glow = pow(warmth * highlight, 0.72);
+          vec3 orange = vec3(luminance * 1.45, luminance * 0.53, luminance * 0.08);
+      
+          color = mix(color, orange, glow * 0.86);
+          color += vec3(0.12, 0.025, 0.0) * glow;
+          outputColor = vec4(color, inputColor.a);
+        }
+      `;
+
+      function SunsetGrade() {
+        const effect = useMemo(
+          () =>
+            new Effect("Sunset grade", sunsetGradeShader, {
+              blendFunction: BlendFunction.NORMAL,
+            }),
+          [],
+        );
+
+        useEffect(() => () => effect.dispose(), [effect]);
+
+        return <primitive object={effect} />;
+      }
+
+      function configureClouds(effect) {
+        if (effect != null) {
+          // The default keeps 90% of the previous frame, which smears nearby clouds.
+          effect.cloudsPass.resolveMaterial.uniforms.temporalAlpha.value = 0.3;
+        }
+      }
+
+      function SummerSky({ mode }) {
+        const sunset = mode === "sunset";
+        const settings = modes[mode];
+
+        return (
+          <Atmosphere date={settings.date} correctAltitude ground={false}>
+            <EffectComposer multisampling={0} enableNormalPass>
+              {/* Quarter-resolution temporal reconstruction causes visible shimmer
+              on moving silhouettes, so render every cloud pixel each frame. */}
+              <Clouds
+                ref={configureClouds}
+                disableDefaultLayers
+                qualityPreset={innerWidth < 760 ? "low" : "medium"}
+                coverage={sunset ? 0.39 : 0.46}
+                skyLightScale={sunset ? 0.9 : 1}
+                groundBounceScale={sunset ? 0.4 : 1}
+                powderScale={sunset ? 0.72 : 0.8}
+                temporalUpscale={false}
+                lightShafts={false}
+                haze
+                turbulence
+                localWeatherRepeat={[32, 32]}
+                localWeatherVelocity={reduceMotion ? [0, 0] : [0.00001, 0.000003]}
+                shapeRepeat={[0.00022, 0.00022, 0.00022]}
+                shapeOffset={randomCloudStart.shapeOffset}
+                shapeDetailRepeat={[0.0072, 0.0072, 0.0072]}
+                shapeDetailOffset={randomCloudStart.shapeDetailOffset}
+                shapeVelocity={reduceMotion ? [0, 0, 0] : [0.0018, 0.00025, -0.00012]}
+                shapeDetailVelocity={reduceMotion ? [0, 0, 0] : [0.0036, 0.0005, -0.0002]}
+              >
+                <CloudLayer
+                  channel="r"
+                  altitude={sunset ? 1100 : 700}
+                  height={1300}
+                  densityScale={sunset ? 0.145 : 0.18}
+                  weatherExponent={0.9}
+                  shapeAlteringBias={0.34}
+                  coverageFilterWidth={0.58}
+                  shadow
+                />
+                <CloudLayer
+                  channel="g"
+                  altitude={sunset ? 1400 : 800}
+                  height={4200}
+                  densityScale={sunset ? 0.1 : 0.12}
+                  weatherExponent={1.15}
+                  shapeAlteringBias={0.4}
+                  coverageFilterWidth={0.56}
+                  shadow
+                />
+              </Clouds>
+              <AerialPerspective sky sunLight skyLight />
+              {sunset && (
+                <Bloom
+                  mipmapBlur
+                  intensity={0.9}
+                  luminanceThreshold={0.48}
+                  luminanceSmoothing={0.2}
+                />
+              )}
+              <ToneMapping mode={ToneMappingMode.AGX} />
+              {sunset && <SunsetGrade />}
+            </EffectComposer>
+            <Exposure value={settings.exposure} />
+            <Ready />
+          </Atmosphere>
+        );
+      }
+
+      function App() {
+        const [mode, setMode] = useState(initialMode);
+
+        useEffect(() => {
+          document.body.dataset.mode = mode;
+          document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute("content", mode === "sunset" ? "#617990" : "#159fd6");
+
+          const url = new URL(location.href);
+          if (mode === "sunset") {
+            url.searchParams.set("mode", "sunset");
+          } else {
+            url.searchParams.delete("mode");
+          }
+          history.replaceState(null, "", url);
+        }, [mode]);
+
+        return (
+          <>
+            <Canvas
+              dpr={[0.8, 1.25]}
+              frameloop={reduceMotion ? "demand" : "always"}
+              gl={{
+                antialias: false,
+                depth: false,
+                powerPreference: "high-performance",
+                toneMappingExposure: modes[mode].exposure,
+              }}
+              camera={{
+                near: 1,
+                far: 400000,
+                position: cameraPosition,
+                rotation: cameraRotation,
+              }}
+            >
+              <Suspense fallback={null}>
+                <SummerSky mode={mode} />
+              </Suspense>
+            </Canvas>
+            <button
+              id="mode-toggle"
+              type="button"
+              aria-label={`Switch to ${mode === "day" ? "sunset" : "day"} sky`}
+              title={`Switch to ${mode === "day" ? "sunset" : "day"}`}
+              onClick={() => setMode((current) => (current === "day" ? "sunset" : "day"))}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </>
+        );
+      }
+
+      try {
+        createRoot(container).render(<App />);
+      } catch (error) {
+        showError(error);
+      }
+    </script>
+  </body>
+</html>

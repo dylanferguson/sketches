@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--
+           ╭─────────────────╮
+           │ You made this?? │
+           ╰─────────────────╯
+
+
+
+                     · · ·
+
+
+
+              ╭─────────────────╮
+              │  I made this.   │
+              ╰─────────────────╯
+    -->
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Solitaire</title>
+    <!-- Preload card images for faster loading -->
+    <link rel="preconnect" href="https://deckofcardsapi.com" />
+    <link rel="dns-prefetch" href="https://deckofcardsapi.com" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #008080;
+        overflow: hidden;
+        height: 100vh;
+        font-family: "MS Sans Serif", Tahoma, sans-serif;
+        font-size: 11px;
+      }
+
+      /** Desktop: hide on mobile viewports */
+      @media (max-width: 768px) {
+        #win {
+          display: none !important;
+        }
+      }
+
+      /** Main window container */
+      #win {
+        width: min(640px, calc(100vw - 16px));
+        height: min(480px, calc(100vh - 16px));
+        min-width: 320px;
+        min-height: 240px;
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        background: #c0c0c0;
+        border: 2px solid;
+        border-color: #fff #808080 #808080 #fff;
+        outline: 1px solid #000;
+      }
+
+      /** Desktop: position in lower right with zoom-resilient units */
+      @media (min-width: 769px) {
+        #win {
+          left: auto;
+          right: 2vmin;
+          top: auto;
+          bottom: 2vmin;
+        }
+      }
+
+      #win.dragging {
+        opacity: 0.95;
+        box-shadow: 4px 4px 20px rgba(0, 0, 0, 0.5);
+      }
+
+      /** Title bar with gradient */
+      #titlebar {
+        background: linear-gradient(to right, #000080 0%, #1084d0 100%);
+        height: 18px;
+        min-height: 18px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 2px;
+        cursor: move;
+        user-select: none;
+        flex-shrink: 0;
+      }
+
+      .t-icon {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+      }
+
+      .t-title {
+        flex: 1;
+        color: #fff;
+        font-weight: bold;
+        font-size: 11px;
+      }
+
+      .t-btns {
+        display: flex;
+        gap: 2px;
+      }
+
+      .t-btn {
+        width: 16px;
+        height: 14px;
+        background: #c0c0c0;
+        border: 1.5px solid;
+        border-color: #fff #808080 #808080 #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        font-weight: bold;
+        color: #000;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .t-btn:active {
+        border-color: #808080 #fff #fff #808080;
+      }
+
+      /** Menu bar */
+      #menubar {
+        background: #c0c0c0;
+        border-bottom: 1px solid #808080;
+        padding: 1px 2px;
+        display: flex;
+        flex-shrink: 0;
+      }
+
+      .menu-item {
+        padding: 2px 8px;
+        cursor: default;
+      }
+
+      .menu-item:hover {
+        background: #000080;
+        color: #fff;
+      }
+
+      /** Game area */
+      #game {
+        flex: 1;
+        position: relative;
+        background: #008f39;
+        overflow: hidden;
+        min-height: 0;
+      }
+
+      canvas {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
+      /** Status bar */
+      #statusbar {
+        background: #c0c0c0;
+        border-top: 1px solid #fff;
+        height: 20px;
+        min-height: 20px;
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      .spane {
+        padding: 0 6px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        border: 1px solid;
+        border-color: #808080 #fff #fff #808080;
+        margin: 2px;
+        white-space: nowrap;
+      }
+
+      .spane.grow {
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="win">
+      <div id="titlebar">
+        <svg class="t-icon" width="14" height="14" viewBox="0 0 14 14">
+          <rect
+            x="1"
+            y="1"
+            width="12"
+            height="12"
+            rx="1"
+            fill="#fff"
+            stroke="#000"
+            stroke-width=".5"
+          />
+          <text x="7" y="11" font-size="9" text-anchor="middle" fill="#c00" font-family="serif">
+            ♥
+          </text>
+        </svg>
+        <div class="t-title">Solitaire</div>
+        <div class="t-btns">
+          <div class="t-btn">&#x2014;</div>
+          <div class="t-btn">&#x25A1;</div>
+          <div class="t-btn" onclick="history.back()">&#x2715;</div>
+        </div>
+      </div>
+      <div id="menubar">
+        <div class="menu-item">Game</div>
+        <div class="menu-item">Help</div>
+      </div>
+      <div id="game"><canvas id="c"></canvas></div>
+      <div id="statusbar">
+        <div class="spane grow" id="s-left">
+          Bonus: 5000&nbsp;&nbsp;&nbsp;Click or Press Esc to stop...
+        </div>
+        <div class="spane" id="s-right">Score: 0&nbsp;&nbsp;Time: 0</div>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * Windows 3.0 Solitaire Animation
+       * Recreates the classic victory animation with draggable window
+       * @version 2.0
+       */
+
+      /** @type {boolean} Application started state */
+      let started = false;
+
+      // =============================================================================
+      // CONSTANTS
+      // =============================================================================
+
+      /** Card dimensions in pixels */
+      const CARD = {
+        WIDTH: 71,
+        HEIGHT: 96,
+        RADIUS: 4,
+      };
+
+      /** Physics constants for card animation */
+      const PHYSICS = {
+        GRAVITY: 0.55,
+        RESTITUTION: 0.68,
+        MAX_BOUNCES: 5,
+      };
+
+      /** Layout positions */
+      const LAYOUT = {
+        PILE_Y: 12,
+        STOCK_X: 12,
+        GAP: 8,
+      };
+
+      /** Card suits and ranks */
+      const SUITS = ["♠", "♥", "♦", "♣"];
+      const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+
+      /** Suit to API code mapping */
+      const SUIT_CODES = { "♠": "S", "♥": "H", "♦": "D", "♣": "C" };
+
+      // =============================================================================
+      // CANVAS SETUP
+      // =============================================================================
+
+      const gameEl = document.getElementById("game");
+      const canvas = document.getElementById("c");
+      const ctx = canvas.getContext("2d");
+
+      /** @type {number} Canvas width */
+      let W = 0;
+      /** @type {number} Canvas height */
+      let H = 0;
+
+      /**
+       * Resize canvas to match container and redraw background
+       */
+      function resize() {
+        W = canvas.width = gameEl.clientWidth;
+        H = canvas.height = gameEl.clientHeight;
+        if (started) drawBg();
+      }
+
+      resize();
+      new ResizeObserver(resize).observe(gameEl);
+
+      // =============================================================================
+      // DRAWING UTILITIES
+      // =============================================================================
+
+      /**
+       * Creates a rounded rectangle path
+       * @param {CanvasRenderingContext2D} c - Canvas context
+       * @param {number} x - X position
+       * @param {number} y - Y position
+       * @param {number} w - Width
+       * @param {number} h - Height
+       * @param {number} r - Corner radius
+       */
+      function rrPath(c, x, y, w, h, r) {
+        c.beginPath();
+        c.moveTo(x + r, y);
+        c.lineTo(x + w - r, y);
+        c.arcTo(x + w, y, x + w, y + r, r);
+        c.lineTo(x + w, y + h - r);
+        c.arcTo(x + w, y + h, x + w - r, y + h, r);
+        c.lineTo(x + r, y + h);
+        c.arcTo(x, y + h, x, y + h - r, r);
+        c.lineTo(x, y + r);
+        c.arcTo(x, y, x + r, y, r);
+        c.closePath();
+      }
+
+      /**
+       * Calculates foundation pile X position
+       * @param {number} i - Pile index (0-3)
+       * @returns {number} X coordinate
+       */
+      function foundX(i) {
+        return W - 10 - CARD.WIDTH - (3 - i) * (CARD.WIDTH + LAYOUT.GAP);
+      }
+
+      // =============================================================================
+      // CARD RENDERING
+      // =============================================================================
+
+      /**
+       * Draws the Windows 3.0 green dotted card back
+       * @param {number} x - X position
+       * @param {number} y - Y position
+       */
+      function drawCardBack(x, y) {
+        // White border
+        ctx.fillStyle = "#fff";
+        rrPath(ctx, x, y, CARD.WIDTH, CARD.HEIGHT, CARD.RADIUS);
+        ctx.fill();
+
+        // Green pattern area
+        ctx.save();
+        rrPath(ctx, x + 3, y + 3, CARD.WIDTH - 6, CARD.HEIGHT - 6, CARD.RADIUS - 1);
+        ctx.clip();
+
+        ctx.fillStyle = "#2E8B57";
+        ctx.fillRect(x + 3, y + 3, CARD.WIDTH - 6, CARD.HEIGHT - 6);
+
+        // Dotted pattern
+        ctx.fillStyle = "#3CB371";
+        const spacing = 6;
+        for (let row = 0; row < (CARD.HEIGHT - 6) / spacing; row++) {
+          for (let col = 0; col < (CARD.WIDTH - 6) / spacing; col++) {
+            const px = x + 5 + col * spacing;
+            const py = y + 5 + row * spacing;
+            ctx.fillRect(px + (row % 2) * 3, py, 2, 2);
+          }
+        }
+        ctx.restore();
+
+        // Border stroke
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        rrPath(ctx, x + 0.5, y + 0.5, CARD.WIDTH - 1, CARD.HEIGHT - 1, CARD.RADIUS);
+        ctx.stroke();
+      }
+
+      /**
+       * Draws empty foundation slot outline
+       * @param {number} x - X position
+       * @param {number} y - Y position
+       */
+      function drawSlot(x, y) {
+        rrPath(ctx, x, y, CARD.WIDTH, CARD.HEIGHT, CARD.RADIUS);
+        ctx.strokeStyle = "rgba(0, 100, 0, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      /**
+       * Draws a completed foundation pile with depth effect
+       * @param {number} x - X position
+       * @param {number} y - Y position
+       */
+      function drawFoundationPile(x, y) {
+        // Shadow cards for depth
+        for (let i = 8; i >= 1; i--) {
+          const offsetX = i * 0.7;
+          const offsetY = i * 0.5;
+          ctx.fillStyle = `hsl(0,0%,${85 + i}%)`;
+          rrPath(ctx, x + offsetX, y + offsetY, CARD.WIDTH, CARD.HEIGHT, CARD.RADIUS);
+          ctx.fill();
+          ctx.strokeStyle = "#bbb";
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+        drawCardBack(x, y);
+      }
+
+      // =============================================================================
+      // IMAGE LOADING
+      // =============================================================================
+
+      /** @type {Object<string, HTMLImageElement>} Cached card images */
+      const cardImages = {};
+      let loadedCount = 0;
+
+      /**
+       * Loads all 52 card images from the deck API
+       */
+      function loadCardImages() {
+        const rankCode = (r) => (r === "10" ? "0" : r);
+
+        for (const rank of RANKS) {
+          for (const suit of SUITS) {
+            const img = new Image();
+            const key = rank + suit;
+            const code = `${rankCode(rank)}${SUIT_CODES[suit]}`;
+
+            img.onload = img.onerror = () => {
+              if (++loadedCount === 52) onReady();
+            };
+            img.src = `https://deckofcardsapi.com/static/img/${code}.png`;
+            cardImages[key] = img;
+          }
+        }
+      }
+
+      /**
+       * Draws a card face (from loaded image or fallback)
+       * @param {string} rank - Card rank
+       * @param {string} suit - Card suit
+       * @param {number} x - X position
+       * @param {number} y - Y position
+       */
+      function drawCardFace(rank, suit, x, y) {
+        const key = rank + suit;
+        const img = cardImages[key];
+
+        if (img?.complete && img.naturalWidth > 0) {
+          ctx.drawImage(img, x, y, CARD.WIDTH, CARD.HEIGHT);
+        } else {
+          // Fallback rendering
+          ctx.fillStyle = "#fff";
+          rrPath(ctx, x, y, CARD.WIDTH, CARD.HEIGHT, CARD.RADIUS);
+          ctx.fill();
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = "#000";
+          ctx.font = "10px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(key, x + CARD.WIDTH / 2, y + CARD.HEIGHT / 2);
+        }
+      }
+
+      // =============================================================================
+      // GAME STATE
+      // =============================================================================
+
+      /** Card queues for each foundation pile */
+      const cardQueues = SUITS.map((suit) =>
+        Array.from({ length: 13 }, (_, i) => ({ rank: RANKS[12 - i], suit })),
+      );
+
+      /** Current position in each queue */
+      const queueHeads = [0, 0, 0, 0];
+
+      /**
+       * Gets next card from a foundation pile queue
+       * @param {number} pileIndex - Pile index (0-3)
+       * @returns {{rank: string, suit: string}} Card object
+       */
+      function nextCard(pileIndex) {
+        const queue = cardQueues[pileIndex];
+        const head = queueHeads[pileIndex]++ % queue.length;
+        return queue[head];
+      }
+
+      // =============================================================================
+      // FLYING CARD CLASS
+      // =============================================================================
+
+      /** @type {FlyingCard[]} Active flying cards */
+      const activeCards = [];
+
+      /** Current pile index for sequential animation */
+      let currentPile = 0;
+
+      /** Whether a new card can be launched */
+      let canLaunch = true;
+
+      /**
+       * Represents a card flying from foundation to bottom of screen
+       */
+      class FlyingCard {
+        /**
+         * @param {string} rank - Card rank
+         * @param {string} suit - Card suit
+         * @param {number} pileIndex - Source foundation pile
+         */
+        constructor(rank, suit, pileIndex) {
+          this.rank = rank;
+          this.suit = suit;
+          this.x = foundX(pileIndex) + (Math.random() - 0.5) * 3;
+          this.y = LAYOUT.PILE_Y;
+          this.vx = -(Math.random() * 2 + 2); // -2 to -4 px/frame
+          this.vy = -(Math.random() * 2 + 7); // -7 to -9 px/frame
+          this.bounces = 0;
+          this.dead = false;
+        }
+
+        /**
+         * Updates physics and position
+         */
+        update() {
+          this.vy += PHYSICS.GRAVITY;
+          this.x += this.vx;
+          this.y += this.vy;
+
+          // Floor collision
+          if (this.y + CARD.HEIGHT >= H) {
+            this.y = H - CARD.HEIGHT;
+            this.vy *= -PHYSICS.RESTITUTION;
+            this.vx *= 0.99;
+            this.bounces++;
+            if (Math.abs(this.vy) < 1.0 || this.bounces >= PHYSICS.MAX_BOUNCES) {
+              this.dead = true;
+            }
+          }
+
+          // Off-screen check
+          if (this.x + CARD.WIDTH < -10 || this.x > W + 10) {
+            this.dead = true;
+          }
+        }
+
+        /**
+         * Renders the card
+         */
+        draw() {
+          drawCardFace(this.rank, this.suit, this.x, this.y);
+        }
+      }
+
+      /**
+       * Launches a card from a foundation pile
+       * @param {number} pileIndex - Pile index (0-3)
+       */
+      function launchCard(pileIndex) {
+        const card = nextCard(pileIndex);
+        activeCards.push(new FlyingCard(card.rank, card.suit, pileIndex));
+        canLaunch = false;
+      }
+
+      // =============================================================================
+      // RENDERING
+      // =============================================================================
+
+      /**
+       * Draws the static background (game board)
+       */
+      function drawBg() {
+        ctx.fillStyle = "#008f39";
+        ctx.fillRect(0, 0, W, H);
+        drawSlot(LAYOUT.STOCK_X, LAYOUT.PILE_Y);
+        for (let i = 0; i < 4; i++) {
+          drawFoundationPile(foundX(i), LAYOUT.PILE_Y);
+        }
+      }
+
+      // =============================================================================
+      // MAIN LOOP
+      // =============================================================================
+
+      /**
+       * Main animation loop
+       */
+      function tick() {
+        // Launch new card if allowed
+        if (canLaunch) {
+          launchCard(currentPile);
+        }
+
+        // Update and draw all cards
+        for (let i = activeCards.length - 1; i >= 0; i--) {
+          const card = activeCards[i];
+          card.update();
+
+          if (card.dead) {
+            activeCards.splice(i, 1);
+            continue;
+          }
+
+          card.draw();
+        }
+
+        // Check if next pile can start
+        if (!canLaunch) {
+          const living = activeCards.filter((c) => !c.dead);
+          const allOutOfFrame = living.length === 0 || living.every((c) => c.x + CARD.WIDTH < 0);
+
+          if (allOutOfFrame) {
+            canLaunch = true;
+            currentPile = (currentPile + 1) % 4;
+          }
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      // =============================================================================
+      // SCORE/TIMER
+      // =============================================================================
+
+      const sLeft = document.getElementById("s-left");
+      const sRight = document.getElementById("s-right");
+
+      let score = 0;
+      let secs = 0;
+      let bonus = 5000;
+
+      setInterval(() => {
+        secs++;
+        score += 10;
+        bonus = Math.max(0, bonus - 13);
+        sLeft.textContent = `Bonus: ${bonus}   Click or Press Esc to stop...`;
+        sRight.textContent = `Score: ${score}  Time: ${secs}`;
+      }, 1000);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") history.back();
+      });
+
+      canvas.addEventListener("click", () => history.back());
+
+      // =============================================================================
+      // INITIALIZATION
+      // =============================================================================
+
+      /**
+       * Starts the animation after images load
+       */
+      function onReady() {
+        if (started) return;
+        started = true;
+        drawBg();
+        tick();
+      }
+
+      loadCardImages();
+      setTimeout(onReady, 1500);
+
+      // =============================================================================
+      // WINDOW MANAGEMENT
+      // =============================================================================
+
+      const winEl = document.getElementById("win");
+      const titlebarEl = document.getElementById("titlebar");
+
+      /** @type {{isDragging: boolean, offsetX: number, offsetY: number, hasBeenDragged: boolean}} */
+      const dragState = {
+        isDragging: false,
+        offsetX: 0,
+        offsetY: 0,
+        hasBeenDragged: false,
+      };
+
+      /**
+       * Gets current viewport dimensions (handles zoom)
+       * @returns {{width: number, height: number, offsetX: number, offsetY: number}}
+       */
+      function getViewport() {
+        const vv = window.visualViewport;
+        return {
+          width: vv?.width ?? window.innerWidth,
+          height: vv?.height ?? window.innerHeight,
+          offsetX: vv?.offsetLeft ?? 0,
+          offsetY: vv?.offsetTop ?? 0,
+        };
+      }
+
+      /**
+       * Keeps window within viewport bounds
+       */
+      function keepInBounds() {
+        const vp = getViewport();
+        if (vp.width <= 768) return;
+
+        const rect = winEl.getBoundingClientRect();
+        const maxX = vp.width - winEl.offsetWidth;
+        const maxY = vp.height - winEl.offsetHeight;
+
+        if (dragState.hasBeenDragged) {
+          const newLeft = Math.max(0, Math.min(rect.left, maxX));
+          const newTop = Math.max(0, Math.min(rect.top, maxY));
+          winEl.style.left = `${newLeft}px`;
+          winEl.style.top = `${newTop}px`;
+          winEl.style.right = "auto";
+          winEl.style.bottom = "auto";
+        } else {
+          winEl.style.left = "auto";
+          winEl.style.top = "auto";
+          winEl.style.right = "2vmin";
+          winEl.style.bottom = "2vmin";
+        }
+      }
+
+      // Event listeners
+      window.addEventListener("resize", keepInBounds);
+      window.visualViewport?.addEventListener("resize", keepInBounds);
+      window.visualViewport?.addEventListener("scroll", keepInBounds);
+
+      titlebarEl.addEventListener("mousedown", (e) => {
+        if (e.target.closest(".t-btn")) return;
+
+        dragState.isDragging = true;
+        const rect = winEl.getBoundingClientRect();
+        dragState.offsetX = e.clientX - rect.left;
+        dragState.offsetY = e.clientY - rect.top;
+        dragState.hasBeenDragged = true;
+        winEl.classList.add("dragging");
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        if (!dragState.isDragging) return;
+
+        const vp = getViewport();
+        const x = e.clientX - dragState.offsetX;
+        const y = e.clientY - dragState.offsetY;
+        const maxX = vp.width - winEl.offsetWidth;
+        const maxY = vp.height - winEl.offsetHeight;
+
+        winEl.style.left = `${Math.max(0, Math.min(x, maxX))}px`;
+        winEl.style.top = `${Math.max(0, Math.min(y, maxY))}px`;
+        winEl.style.right = "auto";
+        winEl.style.bottom = "auto";
+      });
+
+      document.addEventListener("mouseup", () => {
+        dragState.isDragging = false;
+        winEl.classList.remove("dragging");
+      });
+    </script>
+  </body>
+</html>
