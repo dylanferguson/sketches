@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="user-scalable=yes, width=device-width" />
+    <title>Muji Calendar</title>
+    <style type="text/css">
+      :root {
+        --light-gray: rgba(85, 85, 85, 0.3);
+        --black: rgb(17, 17, 17);
+        --gray: rgb(85, 85, 85);
+        --white: rgb(255, 254, 249);
+        --red: rgb(223, 84, 71);
+      }
+
+      body {
+        max-width: 960px;
+        margin: 80px auto;
+        font-family:
+          "Gotham HTF",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif,
+          "Apple Color Emoji",
+          "Segoe UI Emoji",
+          "Segoe UI Symbol";
+        color: var(--black);
+        background-color: var(--white);
+      }
+
+      .cal {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-gap: 40px;
+      }
+
+      .month {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        grid-gap: 5px;
+      }
+
+      .month div {
+        text-align: center;
+        font-size: 18px;
+        height: 0;
+        padding-bottom: 100%;
+      }
+
+      .month div:nth-child(-n + 7) {
+        color: var(--light-gray);
+      }
+
+      .today {
+        color: var(--red);
+      }
+
+      .before {
+        color: var(--light-gray);
+      }
+
+      h1 {
+        text-align: center;
+        font-size: 72px;
+        color: var(--gray);
+        font-weight: 500;
+      }
+
+      h2 {
+        color: var(--gray);
+        font-size: 42px;
+        margin: 10px 0;
+        font-weight: 500;
+        padding: 0 10px;
+        grid-column: 1 / -1;
+      }
+
+      @media (max-width: 700px) {
+        .cal {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 500px) {
+        .cal {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media print {
+        body {
+          background-color: white;
+        }
+
+        .today,
+        .before {
+          color: var(--black);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <section>
+      <h1 class="year"></h1>
+      <div class="cal"></div>
+    </section>
+    <script type="text/javascript">
+      const yearElem = document.querySelector(".year");
+      const cal = document.querySelector(".cal");
+      const year = new Date().getFullYear();
+      const isToday = (day, month) =>
+        day === new Date().getDate() && month === new Date().getMonth() + 1;
+      const beforeToday = (day, month) => {
+        if (month < new Date().getMonth() + 1) {
+          return true;
+        }
+        return month === new Date().getMonth() + 1 && day < new Date().getDate();
+      };
+      let monthElems = [];
+      let month;
+      let first;
+      let daysInMonth;
+      let className;
+
+      document.title = year;
+      yearElem.innerHTML += `${year}`;
+
+      for (let i = 1; i <= 12; i++) {
+        daysInMonth = new Date(year, i, 0).getDate();
+        first = new Date(year, i - 1, 1).getDay();
+        if (first == 0) {
+          first = 7;
+        }
+
+        monthElems = [
+          `<div><h2>${i}</h2><div class='month'>
+				<div>M</div>
+				<div>T</div>
+				<div>W</div>
+				<div>T</div>
+				<div>F</div>
+				<div>S</div>
+				<div>S</div>`,
+        ];
+        className = [`${isToday(1, i) ? "today" : ""}`, `${beforeToday(1, i) ? "before" : ""}`];
+        monthElems.push(
+          `<div class="${className.join(" ")}" style='grid-column: ${first} / ${first}'>1</div>`,
+        );
+        for (let j = 2; j <= daysInMonth; j++) {
+          className = [`${isToday(j, i) ? "today" : ""}`, `${beforeToday(j, i) ? "before" : ""}`];
+          monthElems.push(`<div class="${className.join(" ")}"><span>${j}</span></div>`);
+        }
+        // Ensure consistent number of grid rows across months so they're aligned vertically
+        if (daysInMonth + first - 1 <= 35) {
+          monthElems.push("<div>&nbsp;</div>".repeat(36 - (daysInMonth + first - 1)));
+        }
+        monthElems.push("</div></div>");
+        cal.innerHTML += monthElems.join("");
+      }
+    </script>
+  </body>
+</html>
