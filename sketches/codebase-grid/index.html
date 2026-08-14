@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A Tron-inspired 3D map of codebase modules and dependency traffic."
+    />
+    <title>Codebase Grid</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --cyan: #2ff7ff;
+        --cyan-soft: rgba(47, 247, 255, 0.18);
+        --orange: #ff9b46;
+        --ink: #c9fcff;
+        --muted: #65969c;
+        --panel: rgba(2, 11, 19, 0.78);
+        --line: rgba(47, 247, 255, 0.24);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #01070c;
+      }
+      body {
+        font:
+          12px/1.4 "SFMono-Regular",
+          Consolas,
+          "Liberation Mono",
+          monospace;
+        color: var(--ink);
+      }
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        isolation: isolate;
+      }
+      #scene {
+        position: absolute;
+        inset: 0;
+      }
+      canvas {
+        display: block;
+      }
+      #scanlines {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+        opacity: 0.12;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 3px,
+          rgba(117, 255, 255, 0.13) 4px
+        );
+        mix-blend-mode: screen;
+      }
+      #legend {
+        position: absolute;
+        left: 24px;
+        bottom: 22px;
+        z-index: 4;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px 14px;
+        max-width: min(720px, calc(100vw - 48px));
+        color: var(--muted);
+        pointer-events: none;
+      }
+      .key {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .swatch {
+        width: 14px;
+        height: 2px;
+        box-shadow: 0 0 7px currentColor;
+      }
+      .swatch.flow {
+        color: var(--cyan);
+        background: currentColor;
+      }
+      .swatch.support {
+        color: var(--orange);
+        background: currentColor;
+      }
+      .swatch.packet {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        color: #fff;
+        background: currentColor;
+      }
+      #controls {
+        position: absolute;
+        right: 22px;
+        bottom: 22px;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        backdrop-filter: blur(10px);
+      }
+      button {
+        appearance: none;
+        border: 1px solid rgba(47, 247, 255, 0.28);
+        border-radius: 0;
+        background: rgba(47, 247, 255, 0.06);
+        color: var(--ink);
+        padding: 7px 9px;
+        font: inherit;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      button:hover,
+      button:focus-visible {
+        border-color: var(--cyan);
+        background: rgba(47, 247, 255, 0.13);
+        outline: none;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      input[type="range"] {
+        width: 72px;
+        accent-color: var(--cyan);
+      }
+      #detail {
+        position: absolute;
+        z-index: 6;
+        min-width: 210px;
+        max-width: min(300px, calc(100vw - 24px));
+        padding: 12px 13px;
+        background: rgba(1, 9, 15, 0.94);
+        border: 1px solid var(--cyan);
+        box-shadow: 0 0 26px rgba(47, 247, 255, 0.16);
+        pointer-events: none;
+        opacity: 0;
+        transform: translate(10px, 10px);
+        transition: opacity 100ms ease;
+      }
+      #detail.visible {
+        opacity: 1;
+      }
+      #detail .tag {
+        color: var(--cyan);
+        font-size: 9px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+      #detail h2 {
+        margin: 5px 0 4px;
+        font-size: 13px;
+        line-height: 1.25;
+        font-weight: 500;
+        color: #f0ffff;
+      }
+      #detail p {
+        margin: 0;
+        color: #7fb1b5;
+        font-size: 10px;
+      }
+      #detail .count {
+        margin-top: 8px;
+        color: var(--orange);
+      }
+      #boot {
+        position: absolute;
+        inset: 0;
+        z-index: 9;
+        display: grid;
+        place-items: center;
+        background: #01070c;
+        color: var(--cyan);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        transition:
+          opacity 0.5s ease,
+          visibility 0.5s ease;
+      }
+      #boot.done {
+        opacity: 0;
+        visibility: hidden;
+      }
+      #error {
+        display: none;
+        position: absolute;
+        inset: 24px;
+        z-index: 10;
+        place-items: center;
+        text-align: center;
+        color: #ffb27b;
+      }
+      @media (max-width: 720px) {
+        #legend {
+          left: 14px;
+          bottom: 14px;
+          padding-right: 175px;
+        }
+        #controls {
+          right: 14px;
+          bottom: 14px;
+        }
+        #controls label {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="app"
+      aria-label="Interactive three-dimensional map of the FizzBuzz Enterprise codebase"
+    >
+      <div id="scene" aria-hidden="true"></div>
+      <div id="scanlines"></div>
+      <div id="legend" aria-label="Map legend">
+        <div class="key"><i class="swatch flow"></i>runtime module</div>
+        <div class="key"><i class="swatch support"></i>support module</div>
+        <div class="key"><i class="swatch packet"></i>dependency traffic</div>
+      </div>
+      <div id="controls">
+        <button id="pause" type="button" aria-pressed="false">Pause</button>
+        <button id="reset" type="button">Reset view</button>
+        <label
+          >Flow <input id="speed" type="range" min="0.5" max="6" value="0.5" step="0.5" /><output
+            id="speedValue"
+            >0.5×</output
+          ></label
+        >
+      </div>
+      <aside id="detail" role="status" aria-live="polite">
+        <div class="tag"></div>
+        <h2></h2>
+        <p></p>
+        <div class="count"></div>
+      </aside>
+      <div id="boot">Constructing enterprise context…</div>
+      <div id="error">Three.js could not load. Connect to the internet and reload this file.</div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+      (() => {
+        if (!window.THREE) {
+          document.getElementById("boot").style.display = "none";
+          document.getElementById("error").style.display = "grid";
+          return;
+        }
+
+        const FLOW = 0x2ff7ff;
+        const SUPPORT = 0xff9b46;
+        const WHITE = 0xeaffff;
+        const GRID = 0x0c7180;
+        const container = document.getElementById("scene");
+        const detail = document.getElementById("detail");
+        const pauseButton = document.getElementById("pause");
+        const speedInput = document.getElementById("speed");
+        const speedValue = document.getElementById("speedValue");
+
+        const moduleRecords = [
+          ["abstractdivisibilitystrategyprovider", 21],
+          ["abstracts", 204],
+          ["aop", 27],
+          ["batch", 19],
+          ["bridge", 10],
+          ["builders", 18],
+          ["cache", 25],
+          ["components", 1],
+          ["compositeexpression", 24],
+          ["computationadapter", 27],
+          ["computationcommand", 7],
+          ["computationformatter", 8],
+          ["computationstate", 27],
+          ["computedoutcome", 42],
+          ["contracts", 247],
+          ["corba", 7],
+          ["divisibility", 19],
+          ["divisibilityinterceptoradapter", 24],
+          ["document", 25],
+          ["ejb", 11],
+          ["endpoint", 9],
+          ["enterprise", 2],
+          ["enterpriseclassification", 18],
+          ["enterpriseconfiguration", 18],
+          ["enterprisedivisibilityorchestration", 28],
+          ["enterprisefacade", 4],
+          ["enterprisemodulo", 17],
+          ["enterpriseresolutionlifecycle", 23],
+          ["exceptions", 12],
+          ["execution", 35],
+          ["expressionengine", 11],
+          ["flyweight", 10],
+          ["impl", 398],
+          ["iterators", 6],
+          ["jmx", 22],
+          ["jndi", 7],
+          ["localization", 21],
+          ["moduloarithmeticcommand", 7],
+          ["modulocomputation", 23],
+          ["modulovisitation", 16],
+          ["operators", 38],
+          ["outputcomposite", 16],
+          ["outputresolution", 25],
+          ["patterns", 12],
+          ["pipeline", 21],
+          ["pipelineresolution", 19],
+          ["prototype", 6],
+          ["proxyinvocation", 10],
+          ["resolutiondelegation", 16],
+          ["resultpostprocessing", 9],
+          ["resultvalidationspecification", 25],
+          ["rmi", 10],
+          ["security", 19],
+          ["specification", 10],
+          ["strategylookupservice", 17],
+          ["templatemethod", 7],
+          ["transactions", 31],
+          ["visitortrail", 4],
+          ["workflowmediator", 8],
+          ["workflowmemento", 12],
+        ];
+
+        const runtimeModules = new Set([
+          "impl",
+          "abstracts",
+          "contracts",
+          "enterprise",
+          "enterpriseresolutionlifecycle",
+          "computationcommand",
+          "endpoint",
+          "pipelineresolution",
+          "pipeline",
+          "resolutiondelegation",
+          "enterprisefacade",
+          "execution",
+          "expressionengine",
+          "compositeexpression",
+          "divisibility",
+          "modulocomputation",
+          "enterprisemodulo",
+          "modulovisitation",
+          "operators",
+          "outputresolution",
+          "outputcomposite",
+          "resultpostprocessing",
+          "resultvalidationspecification",
+          "computedoutcome",
+          "computationformatter",
+          "localization",
+          "templatemethod",
+          "specification",
+        ]);
+        const shortNames = {
+          abstractdivisibilitystrategyprovider: "ADSP",
+          abstracts: "ABS",
+          aop: "AOP",
+          batch: "BATCH",
+          bridge: "BRDG",
+          builders: "BLDR",
+          cache: "CACHE",
+          components: "UI",
+          compositeexpression: "CEXP",
+          computationadapter: "ADPT",
+          computationcommand: "CMD",
+          computationformatter: "FMT",
+          computationstate: "STATE",
+          computedoutcome: "DATA",
+          contracts: "IFACE",
+          corba: "CORBA",
+          divisibility: "DIV",
+          divisibilityinterceptoradapter: "DINT",
+          document: "DOC",
+          ejb: "EJB",
+          endpoint: "END",
+          enterprise: "API",
+          enterpriseclassification: "CLASS",
+          enterpriseconfiguration: "CFG",
+          enterprisedivisibilityorchestration: "ORCH",
+          enterprisefacade: "FACA",
+          enterprisemodulo: "EMOD",
+          enterpriseresolutionlifecycle: "LIFE",
+          exceptions: "ERR",
+          execution: "EXEC",
+          expressionengine: "EXPR",
+          flyweight: "FLY",
+          impl: "IMPL",
+          iterators: "ITER",
+          jmx: "JMX",
+          jndi: "JNDI",
+          localization: "L10N",
+          moduloarithmeticcommand: "MCMD",
+          modulocomputation: "MOD",
+          modulovisitation: "VISIT",
+          operators: "OPS",
+          outputcomposite: "OCMP",
+          outputresolution: "OUT",
+          patterns: "PTRN",
+          pipeline: "PIPE",
+          pipelineresolution: "PSEL",
+          prototype: "PROT",
+          proxyinvocation: "PROXY",
+          resolutiondelegation: "DELG",
+          resultpostprocessing: "POST",
+          resultvalidationspecification: "VALID",
+          rmi: "RMI",
+          security: "SEC",
+          specification: "SPEC",
+          strategylookupservice: "LOOK",
+          templatemethod: "TMPL",
+          transactions: "TX",
+          visitortrail: "TRAIL",
+          workflowmediator: "MED",
+          workflowmemento: "MEM",
+        };
+        const roleNames = {
+          impl: "Concrete implementations across the enterprise stack.",
+          contracts: "Public interfaces and service contracts.",
+          abstracts: "Abstract base classes and reusable template behavior.",
+          enterprise: "Public API and application entry points.",
+          enterpriseresolutionlifecycle:
+            "Computation lifecycle orchestration and state transitions.",
+          endpoint: "Service activation and endpoint dispatch.",
+          pipeline: "Pipeline management and execution commands.",
+          pipelineresolution: "Pipeline manager strategy selection.",
+          resolutiondelegation: "Delegation orchestration and business delegate flow.",
+          expressionengine: "Expression interpretation and rule evaluation.",
+          modulocomputation: "Remainder computation strategies and protocol layers.",
+          outputresolution: "Output strategy selection and normalization.",
+          resultvalidationspecification: "Post-computation validation specifications.",
+          security: "Authorization and governance policy enforcement.",
+          transactions: "Transaction coordination around computation.",
+          cache: "Caching of expressions, strategies, and outputs.",
+        };
+        const nodes = moduleRecords.map(([id, files], index) => {
+          const col = index % 10;
+          const row = Math.floor(index / 10);
+          return {
+            id,
+            files,
+            short: shortNames[id] || id.slice(0, 5).toUpperCase(),
+            name: `src/${id}`,
+            x: -28 + col * 6.25,
+            z: -15 + row * 6.1,
+            h: Math.min(9, 1.65 + Math.sqrt(files) * 0.36),
+            kind: runtimeModules.has(id) ? "flow" : "support",
+            role:
+              roleNames[id] ||
+              "Top-level source module family in the enterprise computation stack.",
+          };
+        });
+
+        const canonicalFlow = [
+          ["enterprise", "enterpriseresolutionlifecycle", 12],
+          ["enterpriseresolutionlifecycle", "computationcommand", 10],
+          ["computationcommand", "endpoint", 10],
+          ["endpoint", "pipelineresolution", 9],
+          ["pipelineresolution", "pipeline", 9],
+          ["pipeline", "resolutiondelegation", 9],
+          ["resolutiondelegation", "enterprisefacade", 9],
+          ["enterprisefacade", "execution", 8],
+          ["execution", "expressionengine", 8],
+          ["expressionengine", "compositeexpression", 8],
+          ["compositeexpression", "divisibility", 8],
+          ["divisibility", "modulocomputation", 8],
+          ["modulocomputation", "enterprisemodulo", 8],
+          ["enterprisemodulo", "outputresolution", 8],
+          ["outputresolution", "resultpostprocessing", 7],
+          ["resultpostprocessing", "resultvalidationspecification", 7],
+          ["resultvalidationspecification", "computationformatter", 7],
+          ["computationformatter", "enterprise", 7],
+        ];
+        const dependencyLinks = [
+          ["impl", "contracts", 795],
+          ["abstracts", "contracts", 457],
+          ["impl", "abstracts", 296],
+          ["enterprise", "impl", 28],
+          ["patterns", "contracts", 17],
+          ["impl", "enterprisemodulo", 10],
+          ["impl", "exceptions", 9],
+          ["execution", "modulocomputation", 9],
+          ["enterprise", "contracts", 8],
+          ["proxyinvocation", "contracts", 8],
+          ["outputresolution", "contracts", 8],
+          ["impl", "outputresolution", 8],
+          ["enterprisedivisibilityorchestration", "contracts", 8],
+          ["templatemethod", "moduloarithmeticcommand", 7],
+          ["builders", "iterators", 7],
+          ["impl", "patterns", 7],
+          ["pipelineresolution", "pipeline", 6],
+          ["computedoutcome", "contracts", 6],
+          ["computationformatter", "contracts", 5],
+          ["outputresolution", "abstracts", 5],
+          ["impl", "modulovisitation", 5],
+          ["templatemethod", "specification", 4],
+          ["transactions", "contracts", 4],
+          ["enterpriseclassification", "contracts", 4],
+          ["workflowmediator", "contracts", 4],
+          ["computationadapter", "contracts", 4],
+          ["enterprise", "patterns", 4],
+          ["divisibilityinterceptoradapter", "contracts", 4],
+          ["resultvalidationspecification", "contracts", 4],
+          ["aop", "contracts", 4],
+          ["modulocomputation", "contracts", 4],
+          ["document", "contracts", 4],
+          ["abstracts", "impl", 4],
+          ["jmx", "contracts", 4],
+          ["bridge", "flyweight", 4],
+          ["bridge", "prototype", 4],
+          ["cache", "expressionengine", 4],
+          ["compositeexpression", "contracts", 4],
+          ["divisibility", "operators", 4],
+          ["impl", "document", 4],
+          ["outputcomposite", "contracts", 4],
+          ["computationcommand", "enterprisefacade", 3],
+          ["ejb", "rmi", 3],
+          ["strategylookupservice", "contracts", 3],
+          ["computationstate", "contracts", 3],
+          ["resultpostprocessing", "contracts", 3],
+          ["execution", "contracts", 3],
+          ["operators", "expressionengine", 3],
+          ["impl", "visitortrail", 3],
+          ["impl", "divisibility", 3],
+          ["enterpriseconfiguration", "contracts", 3],
+          ["impl", "ejb", 3],
+          ["rmi", "contracts", 2],
+          ["pipeline", "resolutiondelegation", 2],
+          ["pipeline", "contracts", 2],
+          ["outputresolution", "operators", 2],
+          ["endpoint", "pipeline", 2],
+          ["abstracts", "exceptions", 2],
+          ["security", "contracts", 2],
+          ["impl", "templatemethod", 2],
+          ["impl", "enterprise", 2],
+          ["impl", "outputcomposite", 2],
+          ["impl", "bridge", 2],
+          ["impl", "abstractdivisibilitystrategyprovider", 2],
+        ];
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x01070c);
+        scene.fog = new THREE.FogExp2(0x01070c, 0.011);
+
+        const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 180);
+        const defaultCamera = new THREE.Vector3(46, 51, 58);
+        camera.position.copy(defaultCamera);
+
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          powerPreference: "high-performance",
+        });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.45;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.055;
+        controls.minDistance = 28;
+        controls.maxDistance = 125;
+        controls.maxPolarAngle = Math.PI * 0.47;
+        controls.target.set(0, 1, 0);
+
+        scene.add(new THREE.HemisphereLight(0x72eaff, 0x02070c, 0.32));
+        const cyanLight = new THREE.PointLight(FLOW, 1.7, 55, 2);
+        cyanLight.position.set(3, 15, -5);
+        scene.add(cyanLight);
+        const orangeLight = new THREE.PointLight(SUPPORT, 1.05, 42, 2);
+        orangeLight.position.set(-8, 11, 13);
+        scene.add(orangeLight);
+
+        const grid = new THREE.GridHelper(100, 50, GRID, 0x073039);
+        grid.position.y = -0.02;
+        grid.material.transparent = true;
+        grid.material.opacity = 0.42;
+        scene.add(grid);
+
+        const borderPoints = [
+          new THREE.Vector3(-32, 0.03, -19),
+          new THREE.Vector3(32, 0.03, -19),
+          new THREE.Vector3(32, 0.03, 19),
+          new THREE.Vector3(-32, 0.03, 19),
+          new THREE.Vector3(-32, 0.03, -19),
+        ];
+        const borderGeo = new THREE.BufferGeometry().setFromPoints(borderPoints);
+        scene.add(
+          new THREE.Line(
+            borderGeo,
+            new THREE.LineBasicMaterial({ color: FLOW, transparent: true, opacity: 0.34 }),
+          ),
+        );
+
+        const nodeGroup = new THREE.Group();
+        const pathGroup = new THREE.Group();
+        const packetGroup = new THREE.Group();
+        scene.add(nodeGroup, pathGroup, packetGroup);
+
+        const interactives = [];
+        const nodeMap = new Map();
+
+        function makeLabel(text, color) {
+          const canvas = document.createElement("canvas");
+          canvas.width = 256;
+          canvas.height = 72;
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, 256, 72);
+          ctx.font = "500 27px monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 14;
+          ctx.fillStyle = color;
+          ctx.fillText(text, 128, 36);
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.minFilter = THREE.LinearFilter;
+          const sprite = new THREE.Sprite(
+            new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }),
+          );
+          sprite.scale.set(3.35, 0.94, 1);
+          return sprite;
+        }
+
+        function addNode(node, index) {
+          const color = node.kind === "support" ? SUPPORT : FLOW;
+          const w =
+            node.w || Math.max(2.5, Math.min(4.3, 2.25 + Math.log10(node.files + 1) * 0.75));
+          const d = node.d || w;
+          const geometry = new THREE.BoxGeometry(w, node.h, d);
+          const material = new THREE.MeshPhongMaterial({
+            color,
+            emissive: color,
+            emissiveIntensity: 0.28,
+            transparent: true,
+            opacity: 0.16,
+            shininess: 80,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.position.set(node.x, node.h / 2, node.z);
+          mesh.userData = node;
+          mesh.renderOrder = 2;
+          nodeGroup.add(mesh);
+
+          const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geometry),
+            new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 }),
+          );
+          edges.position.copy(mesh.position);
+          edges.userData = { nodeId: node.id };
+          nodeGroup.add(edges);
+
+          for (let i = 1; i < Math.min(5, Math.ceil(node.h / 1.65)); i++) {
+            const slice = new THREE.LineSegments(
+              new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.06, 0.035, d + 0.06)),
+              new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.24 }),
+            );
+            slice.position.set(
+              node.x,
+              (node.h * i) / Math.min(5, Math.ceil(node.h / 1.65)),
+              node.z,
+            );
+            nodeGroup.add(slice);
+          }
+
+          const top = new THREE.Mesh(
+            new THREE.PlaneGeometry(w * 0.84, d * 0.84),
+            new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              opacity: 0.06,
+              side: THREE.DoubleSide,
+            }),
+          );
+          top.rotation.x = -Math.PI / 2;
+          top.position.set(node.x, node.h + 0.012, node.z);
+          nodeGroup.add(top);
+
+          const label = makeLabel(node.short, node.kind === "support" ? "#ffb572" : "#a9fcff");
+          label.position.set(node.x, node.h + 0.75, node.z);
+          nodeGroup.add(label);
+
+          interactives.push(mesh);
+          nodeMap.set(node.id, { node, mesh, edges, color, index });
+        }
+        nodes.forEach(addNode);
+
+        function routeBetween(a, b, lift = 0.18) {
+          const start = new THREE.Vector3(a.x, lift, a.z);
+          const end = new THREE.Vector3(b.x, lift, b.z);
+          const dx = Math.abs(end.x - start.x),
+            dz = Math.abs(end.z - start.z);
+          if (dx < 0.1 || dz < 0.1) return [start, end];
+          const horizontalFirst = dx >= dz;
+          const corner = horizontalFirst
+            ? new THREE.Vector3(end.x, lift, start.z)
+            : new THREE.Vector3(start.x, lift, end.z);
+          return [start, corner, end];
+        }
+
+        const animatedPaths = [];
+        const packetGeometry = new THREE.SphereGeometry(0.115, 8, 8);
+        const flowPacketMaterial = new THREE.MeshBasicMaterial({
+          color: WHITE,
+          blending: THREE.AdditiveBlending,
+        });
+        const dependencyPacketMaterial = new THREE.MeshBasicMaterial({
+          color: SUPPORT,
+          blending: THREE.AdditiveBlending,
+        });
+        function addPath(a, b, kind = "dependency", order = 0, weight = 1) {
+          const lift = 0.12 + (order % 6) * 0.055;
+          const points = routeBetween(a, b, lift);
+          const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.04);
+          const isFlow = kind === "flow";
+          const color = isFlow ? FLOW : SUPPORT;
+          const lineGeo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(32));
+          const line = new THREE.Line(
+            lineGeo,
+            new THREE.LineBasicMaterial({ color, transparent: true, opacity: isFlow ? 0.82 : 0.2 }),
+          );
+          pathGroup.add(line);
+          const conduit = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 36, isFlow ? 0.038 : 0.016, 4, false),
+            new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              opacity: isFlow ? 0.8 : 0.24,
+              blending: THREE.AdditiveBlending,
+              depthWrite: false,
+            }),
+          );
+          pathGroup.add(conduit);
+
+          const packetCount =
+            (isFlow ? 8 : 2) + Math.min(isFlow ? 8 : 5, Math.ceil(Math.log2(weight + 1)));
+          for (let p = 0; p < packetCount; p++) {
+            const packet = new THREE.Mesh(
+              packetGeometry,
+              isFlow ? flowPacketMaterial : dependencyPacketMaterial,
+            );
+            packetGroup.add(packet);
+            animatedPaths.push({
+              curve,
+              packet,
+              offset: (p / packetCount + ((order * 0.173) % 1)) % 1,
+              rate: 0.78 + ((order + p) % 7) * 0.055,
+            });
+          }
+        }
+
+        canonicalFlow.forEach(([a, b, weight], i) =>
+          addPath(nodeMap.get(a).node, nodeMap.get(b).node, "flow", i, weight),
+        );
+        dependencyLinks.forEach(([a, b, weight], i) =>
+          addPath(nodeMap.get(a).node, nodeMap.get(b).node, "dependency", i, weight),
+        );
+
+        // Small ambient data sparks around the infrastructure zone.
+        const sparkGeo = new THREE.BufferGeometry();
+        const sparkPositions = new Float32Array(600 * 3);
+        for (let i = 0; i < 600; i++) {
+          sparkPositions[i * 3] = (Math.random() - 0.5) * 68;
+          sparkPositions[i * 3 + 1] = Math.random() * 11 + 0.15;
+          sparkPositions[i * 3 + 2] = (Math.random() - 0.5) * 42;
+        }
+        sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
+        const sparks = new THREE.Points(
+          sparkGeo,
+          new THREE.PointsMaterial({ color: FLOW, size: 0.05, transparent: true, opacity: 0.38 }),
+        );
+        scene.add(sparks);
+
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2(2, 2);
+        let hovered = null;
+        let mouseX = 0,
+          mouseY = 0;
+        function setPointer(event) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          mouseX = event.clientX;
+          mouseY = event.clientY;
+        }
+        renderer.domElement.addEventListener("pointermove", setPointer);
+        renderer.domElement.addEventListener("pointerleave", () => {
+          pointer.set(2, 2);
+          hideDetail();
+        });
+
+        function showDetail(node) {
+          detail.querySelector(".tag").textContent =
+            node.kind === "support" ? "Support module" : "Runtime module";
+          detail.querySelector("h2").textContent = node.name;
+          detail.querySelector("p").textContent = node.role;
+          detail.querySelector(".count").textContent =
+            `${node.files} TypeScript source ${node.files === 1 ? "file" : "files"}`;
+          const x = Math.min(innerWidth - detail.offsetWidth - 12, mouseX + 14);
+          const y = Math.min(innerHeight - detail.offsetHeight - 12, mouseY + 14);
+          detail.style.left = `${Math.max(12, x)}px`;
+          detail.style.top = `${Math.max(12, y)}px`;
+          detail.classList.add("visible");
+        }
+        function hideDetail() {
+          detail.classList.remove("visible");
+        }
+        function updateHover() {
+          raycaster.setFromCamera(pointer, camera);
+          const hit = raycaster.intersectObjects(interactives, false)[0];
+          const next = hit ? hit.object : null;
+          if (hovered !== next) {
+            if (hovered) hovered.material.opacity = 0.16;
+            hovered = next;
+            renderer.domElement.style.cursor = hovered ? "crosshair" : "grab";
+            if (hovered) {
+              hovered.material.opacity = 0.32;
+              showDetail(hovered.userData);
+            } else hideDetail();
+          } else if (hovered) showDetail(hovered.userData);
+        }
+
+        let running = true;
+        let speed = 0.5;
+        pauseButton.addEventListener("click", () => {
+          running = !running;
+          pauseButton.textContent = running ? "Pause" : "Resume";
+          pauseButton.setAttribute("aria-pressed", String(!running));
+        });
+        speedInput.addEventListener("input", () => {
+          speed = Number(speedInput.value);
+          speedValue.value = `${speed}×`;
+          speedValue.textContent = `${speed}×`;
+        });
+        document.getElementById("reset").addEventListener("click", () => {
+          camera.position.copy(defaultCamera);
+          controls.target.set(0, 1, 0);
+          controls.update();
+        });
+
+        function resize() {
+          const w = container.clientWidth,
+            h = container.clientHeight;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h, false);
+        }
+        addEventListener("resize", resize);
+
+        const clock = new THREE.Clock();
+        let elapsed = 0;
+        let previous = 0;
+        function animate() {
+          requestAnimationFrame(animate);
+          const now = clock.getElapsedTime();
+          const delta = Math.min(0.05, now - previous);
+          previous = now;
+          if (running) elapsed += delta * speed;
+          animatedPaths.forEach((path, i) => {
+            const t = (elapsed * 0.15 * path.rate + path.offset) % 1;
+            path.packet.position.copy(path.curve.getPointAt(t));
+            const pulse = 1 + Math.sin(elapsed * 5 + i * 0.7) * 0.18;
+            path.packet.scale.setScalar(pulse);
+          });
+          sparks.rotation.y = elapsed * 0.006;
+          updateHover();
+          controls.update();
+          renderer.render(scene, camera);
+        }
+        resize();
+        animate();
+        setTimeout(() => document.getElementById("boot").classList.add("done"), 450);
+      })();
+    </script>
+  </body>
+</html>
