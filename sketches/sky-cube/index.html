@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#dce9ef" />
+    <meta
+      name="description"
+      content="A six-sided sky, drifting independently across every face of a rotating cube."
+    />
+    <meta name="robots" content="noindex" />
+    <title>Sky Cube</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        display: grid;
+        background: #fff;
+      }
+
+      main {
+        display: grid;
+        min-height: 100%;
+        place-items: center;
+        perspective: 1250px;
+        perspective-origin: 50% 38%;
+        touch-action: none;
+        cursor: grab;
+      }
+
+      main.dragging {
+        cursor: grabbing;
+      }
+
+      .stage {
+        --size: clamp(170px, 32vmin, 320px);
+        position: relative;
+        z-index: 1;
+        width: var(--size);
+        height: var(--size);
+        transform: scale(0.4);
+        transform-style: preserve-3d;
+        will-change: transform;
+      }
+
+      .world {
+        position: absolute;
+        inset: 0;
+        transform: rotateX(-6deg);
+        transform-style: preserve-3d;
+        will-change: transform;
+      }
+
+      .cube {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        transform: rotateY(0deg);
+        transform-style: preserve-3d;
+        will-change: transform;
+      }
+
+      .face {
+        position: absolute;
+        inset: -0.75px;
+        overflow: hidden;
+        border: 0;
+        background: #5290bd;
+        box-shadow: none;
+        backface-visibility: hidden;
+      }
+
+      .face::after {
+        position: absolute;
+        z-index: 1;
+        inset: -65%;
+        background: conic-gradient(
+          from 20deg,
+          transparent 0 18%,
+          rgba(255, 86, 190, 0.24) 27%,
+          transparent 38% 57%,
+          rgba(48, 226, 255, 0.22) 68%,
+          transparent 79% 100%
+        );
+        content: "";
+        mix-blend-mode: soft-light;
+        opacity: 0.12;
+        pointer-events: none;
+        animation: iridescent-veil 22s linear infinite;
+      }
+
+      .texture {
+        position: absolute;
+        inset: -17%;
+        overflow: hidden;
+        filter: saturate(var(--saturation, 1)) brightness(var(--brightness, 1));
+      }
+
+      .texture-track {
+        position: relative;
+        width: 400%;
+        height: 100%;
+        animation: endless-scroll var(--mirror-duration) linear var(--delay) infinite;
+        will-change: transform;
+      }
+
+      .texture-tile {
+        position: absolute;
+        top: 0;
+        width: 27%;
+        height: 100%;
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 7.407%, #000);
+        mask-image: linear-gradient(to right, transparent, #000 7.407%, #000);
+      }
+
+      .texture-tile::before {
+        position: absolute;
+        inset: 0;
+        background-image: var(--image);
+        background-position: var(--position, 50% 50%);
+        background-size: cover;
+        content: "";
+      }
+
+      .texture-tile:nth-child(1) {
+        left: -26%;
+      }
+
+      .texture-tile:nth-child(2) {
+        left: -1%;
+      }
+
+      .texture-tile:nth-child(3) {
+        left: 24%;
+      }
+
+      .texture-tile:nth-child(4) {
+        left: 49%;
+      }
+
+      .texture-tile:nth-child(5) {
+        left: 74%;
+      }
+
+      .texture-tile:nth-child(odd)::before {
+        transform: scaleX(-1);
+      }
+
+      .front {
+        transform: rotateY(0deg) translateZ(calc(var(--size) / 2));
+      }
+
+      .right {
+        transform: rotateY(90deg) translateZ(calc(var(--size) / 2));
+      }
+
+      .back {
+        transform: rotateY(180deg) translateZ(calc(var(--size) / 2));
+      }
+
+      .left {
+        transform: rotateY(-90deg) translateZ(calc(var(--size) / 2));
+      }
+
+      .top {
+        transform: rotateX(90deg) translateZ(calc(var(--size) / 2));
+      }
+
+      .bottom {
+        transform: rotateX(-90deg) translateZ(calc(var(--size) / 2));
+      }
+
+      @keyframes endless-scroll {
+        to {
+          transform: translate3d(-50%, 0, 0);
+        }
+      }
+
+      @keyframes iridescent-veil {
+        from {
+          transform: rotate(0deg) scale(1);
+        }
+        50% {
+          opacity: 0.2;
+        }
+        to {
+          transform: rotate(360deg) scale(1.08);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .texture-track,
+        .face::after {
+          animation-play-state: paused;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .stage {
+          --size: min(48vw, 260px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="scene" aria-label="An explorable sky cube. Drag to orbit and scroll to zoom.">
+      <div class="stage" id="stage">
+        <div class="world" id="world">
+          <div class="cube" aria-hidden="true">
+          <div class="face front">
+            <div class="texture" style="--image: url('images/facade-1.png'); --position: 48% 44%; --mirror-duration: 24s; --delay: -3s; --saturation: 1.06"></div>
+          </div>
+          <div class="face right">
+            <div class="texture" style="--image: url('images/facade-2.png'); --position: 77% 58%; --mirror-duration: 24s; --delay: -3s"></div>
+          </div>
+          <div class="face back">
+            <div class="texture" style="--image: url('images/facade-3.png'); --position: 28% 68%; --mirror-duration: 30s; --delay: -7s; --saturation: 0.94"></div>
+          </div>
+          <div class="face left">
+            <div class="texture" style="--image: url('images/facade-4.png'); --position: 12% 42%; --mirror-duration: 30s; --delay: -7s"></div>
+          </div>
+          <div class="face top">
+            <div class="texture" style="--image: url('images/facade-5.png'); --position: 55% 12%; --mirror-duration: 24s; --delay: -3s; --saturation: 1.1"></div>
+          </div>
+          <div class="face bottom">
+            <div class="texture" style="--image: url('images/facade-6.png'); --position: 61% 90%; --mirror-duration: 30s; --delay: -7s; --saturation: 0.88"></div>
+          </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const scene = document.querySelector("#scene");
+      const stage = document.querySelector("#stage");
+      const world = document.querySelector("#world");
+      const cube = document.querySelector(".cube");
+      const pointers = new Map();
+
+      document.querySelectorAll(".texture").forEach((texture) => {
+        const track = document.createElement("div");
+        track.className = "texture-track";
+
+        for (let index = 0; index < 5; index += 1) {
+          const tile = document.createElement("div");
+          tile.className = "texture-tile";
+          track.append(tile);
+        }
+
+        texture.append(track);
+      });
+
+      let rotationX = -6;
+      let rotationY = 0;
+      let zoom = 0.4;
+      let panX = 0;
+      let panY = 0;
+      let pinchDistance = 0;
+      let pinchCenter = null;
+
+      function render() {
+        world.style.transform = `rotateX(${rotationX}deg)`;
+        cube.style.transform = `rotateY(${rotationY}deg)`;
+        stage.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${zoom})`;
+      }
+
+      function distanceBetweenPointers() {
+        const [first, second] = [...pointers.values()];
+        return Math.hypot(second.x - first.x, second.y - first.y);
+      }
+
+      function centerBetweenPointers() {
+        const [first, second] = [...pointers.values()];
+        return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+      }
+
+      scene.addEventListener("pointerdown", (event) => {
+        if (pointers.size >= 2) return;
+        event.preventDefault();
+        pointers.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+          buttonPanning: event.button === 1 || event.button === 2,
+        });
+        scene.setPointerCapture(event.pointerId);
+        scene.classList.add("dragging");
+
+        if (pointers.size === 2) {
+          pinchDistance = distanceBetweenPointers();
+          pinchCenter = centerBetweenPointers();
+        }
+      });
+
+      scene.addEventListener("pointermove", (event) => {
+        const previous = pointers.get(event.pointerId);
+        if (!previous) return;
+
+        pointers.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+          buttonPanning: previous.buttonPanning,
+        });
+
+        if (pointers.size === 1) {
+          if (previous.buttonPanning || event.shiftKey) {
+            panX += event.clientX - previous.x;
+            panY += event.clientY - previous.y;
+          } else {
+            rotationY += (event.clientX - previous.x) * 0.32;
+            rotationX -= (event.clientY - previous.y) * 0.24;
+          }
+        } else if (pointers.size === 2) {
+          const nextDistance = distanceBetweenPointers();
+          const nextCenter = centerBetweenPointers();
+          zoom = Math.max(0.12, Math.min(6, zoom * (nextDistance / pinchDistance)));
+          panX += nextCenter.x - pinchCenter.x;
+          panY += nextCenter.y - pinchCenter.y;
+          pinchDistance = nextDistance;
+          pinchCenter = nextCenter;
+        }
+
+        render();
+      });
+
+      function releasePointer(event) {
+        if (!pointers.has(event.pointerId)) return;
+        pointers.delete(event.pointerId);
+        if (scene.hasPointerCapture(event.pointerId)) scene.releasePointerCapture(event.pointerId);
+        if (pointers.size < 2) {
+          pinchDistance = 0;
+          pinchCenter = null;
+        }
+        if (pointers.size === 0) scene.classList.remove("dragging");
+      }
+
+      scene.addEventListener("pointerup", releasePointer);
+      scene.addEventListener("pointercancel", releasePointer);
+      scene.addEventListener("lostpointercapture", releasePointer);
+      scene.addEventListener("contextmenu", (event) => event.preventDefault());
+
+      scene.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+          zoom = Math.max(0.12, Math.min(6, zoom * Math.exp(-event.deltaY * 0.0012)));
+          render();
+        },
+        { passive: false },
+      );
+
+      addEventListener("keydown", (event) => {
+        const panStep = event.shiftKey ? 40 : 16;
+
+        if (event.key === "ArrowLeft") panX -= panStep;
+        else if (event.key === "ArrowRight") panX += panStep;
+        else if (event.key === "ArrowUp") panY -= panStep;
+        else if (event.key === "ArrowDown") panY += panStep;
+        else if (event.key === "+" || event.key === "=") {
+          zoom = Math.min(6, zoom * 1.1);
+        } else if (event.key === "-") {
+          zoom = Math.max(0.12, zoom * 0.9);
+        } else {
+          return;
+        }
+
+        event.preventDefault();
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
