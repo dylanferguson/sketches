@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="data:," />
+    <title>ASCII City</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        --ink: #b7ffd9;
+        --muted: rgb(183 255 217 / 0.52);
+        --line: rgb(183 255 217 / 0.2);
+        --panel: rgb(2 9 12 / 0.72);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #020608;
+        color: var(--ink);
+      }
+
+      body {
+        touch-action: none;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+      }
+
+      .hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        text-shadow: 0 0 12px rgb(75 255 177 / 0.28);
+      }
+
+      .title {
+        position: absolute;
+        top: 22px;
+        left: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+      }
+
+      .subtitle,
+      .coordinates,
+      .hint {
+        color: var(--muted);
+        font-size: 9px;
+        line-height: 1.6;
+      }
+
+      .subtitle {
+        margin-top: 5px;
+      }
+
+      .coordinates {
+        position: absolute;
+        top: 22px;
+        right: 24px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .hint {
+        position: absolute;
+        bottom: 22px;
+        left: 24px;
+      }
+
+      .crosshair {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 7px;
+        height: 7px;
+        transform: translate(-50%, -50%);
+        opacity: 0.5;
+      }
+
+      .crosshair::before,
+      .crosshair::after {
+        position: absolute;
+        background: var(--ink);
+        content: "";
+      }
+
+      .crosshair::before {
+        top: 3px;
+        left: 0;
+        width: 7px;
+        height: 1px;
+      }
+
+      .crosshair::after {
+        top: 0;
+        left: 3px;
+        width: 1px;
+        height: 7px;
+      }
+
+      .scanline {
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 3px,
+          rgb(0 0 0 / 0.12) 4px
+        );
+        mix-blend-mode: multiply;
+        opacity: 0.65;
+      }
+
+      .vignette {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle, transparent 38%, rgb(0 0 0 / 0.7) 125%);
+      }
+
+      .enter {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        border: 0;
+        background: rgb(2 6 8 / 0.28);
+        color: var(--ink);
+        font: inherit;
+        cursor: pointer;
+        backdrop-filter: blur(1px);
+        transition: opacity 300ms ease;
+      }
+
+      .enter[hidden] {
+        display: none;
+      }
+
+      .enter-copy {
+        padding: 21px 24px 19px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow:
+          0 0 0 1px rgb(0 0 0 / 0.7),
+          0 0 44px rgb(48 255 169 / 0.08);
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .enter-copy strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .enter-copy span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .touch-controls {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        display: none;
+        grid-template-columns: 44px 44px 44px;
+        grid-template-rows: 44px 44px;
+        gap: 4px;
+      }
+
+      .touch-controls button {
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: var(--panel);
+        color: var(--ink);
+        font: 14px/1 monospace;
+        pointer-events: auto;
+        user-select: none;
+      }
+
+      .touch-controls button:active {
+        background: rgb(51 255 174 / 0.16);
+      }
+
+      .touch-controls [data-key="forward"] {
+        grid-column: 2;
+      }
+
+      .touch-controls [data-key="left"] {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      .touch-controls [data-key="back"] {
+        grid-column: 2;
+        grid-row: 2;
+      }
+
+      .touch-controls [data-key="right"] {
+        grid-column: 3;
+        grid-row: 2;
+      }
+
+      @media (pointer: coarse) {
+        .touch-controls {
+          display: grid;
+        }
+
+        .hint {
+          right: 18px;
+          bottom: 118px;
+        }
+
+        .enter-copy span {
+          max-width: 220px;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .title {
+          top: 16px;
+          left: 16px;
+        }
+
+        .coordinates {
+          top: 16px;
+          right: 16px;
+        }
+
+        .hint {
+          left: 16px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .enter {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="city" aria-label="A first-person ASCII city of skyscrapers"></canvas>
+
+    <div class="hud" aria-hidden="true">
+      <div class="scanline"></div>
+      <div class="vignette"></div>
+      <header class="title">
+        <h1>ASCII CITY // SECTOR 07</h1>
+        <div class="subtitle">Pedestrian signal online</div>
+      </header>
+      <div class="coordinates" id="coordinates">X 000.0<br />Z 000.0</div>
+      <div class="hint">
+        WASD / arrows to walk &nbsp;·&nbsp; mouse to look &nbsp;·&nbsp; shift to run
+      </div>
+      <div class="crosshair"></div>
+    </div>
+
+    <button class="enter" id="enter" type="button">
+      <span class="enter-copy">
+        <strong>[ Enter city ]</strong>
+        <span>Click to capture mouse · escape to release</span>
+      </span>
+    </button>
+
+    <div class="touch-controls" aria-label="Movement controls">
+      <button type="button" data-key="forward" aria-label="Walk forward">▲</button>
+      <button type="button" data-key="left" aria-label="Turn left">◀</button>
+      <button type="button" data-key="back" aria-label="Walk backward">▼</button>
+      <button type="button" data-key="right" aria-label="Turn right">▶</button>
+    </div>
+
+    <script type="module">
+      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+
+      const display = document.querySelector("#city");
+      const context = display.getContext("2d", { alpha: false });
+      const enterButton = document.querySelector("#enter");
+      const coordinates = document.querySelector("#coordinates");
+      const coarsePointer = matchMedia("(pointer: coarse)").matches;
+      const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x010306);
+      scene.fog = new THREE.FogExp2(0x020609, 0.0085);
+
+      const camera = new THREE.PerspectiveCamera(67, innerWidth / innerHeight, 0.1, 420);
+      camera.position.set(0, 2.3, 10);
+      camera.rotation.order = "YXZ";
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: false,
+        powerPreference: "high-performance",
+        preserveDrawingBuffer: true,
+      });
+      renderer.setPixelRatio(1);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
+
+      const sampleCanvas = document.createElement("canvas");
+      const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
+      const clock = new THREE.Clock();
+      const keys = new Set();
+      const buildings = [];
+      const neonMaterials = [];
+      const roadWidth = 10;
+      const blockSize = 30;
+      const cityRadius = 7;
+      let columns = 120;
+      let rows = 60;
+      let cellWidth = 8;
+      let cellHeight = 12;
+      let yaw = 0;
+      let pitch = -0.03;
+      let lastRender = 0;
+      let touchLookId = null;
+      let touchX = 0;
+      let touchY = 0;
+
+      function seededRandom(seed) {
+        let value = seed >>> 0;
+        return () => {
+          value += 0x6d2b79f5;
+          let result = value;
+          result = Math.imul(result ^ (result >>> 15), result | 1);
+          result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+          return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      const random = seededRandom(71_042);
+
+      scene.add(new THREE.HemisphereLight(0x76aebb, 0x020304, 1.1));
+      const moonLight = new THREE.DirectionalLight(0xa9d6e3, 2.6);
+      moonLight.position.set(-80, 120, 40);
+      scene.add(moonLight);
+
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(520, 520),
+        new THREE.MeshLambertMaterial({ color: 0x05090b }),
+      );
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      const grid = new THREE.GridHelper(480, 48, 0x144337, 0x0a201b);
+      grid.position.y = 0.015;
+      scene.add(grid);
+
+      function createBuilding(x, z, width, depth, height, hue) {
+        const material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color().setHSL(hue, 0.13, 0.055 + random() * 0.035),
+          emissive: new THREE.Color(0x020607),
+          roughness: 0.8,
+          metalness: 0.2,
+        });
+        const building = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+        building.position.set(x, height / 2, z);
+        scene.add(building);
+        buildings.push({ x, z, halfWidth: width / 2 + 0.8, halfDepth: depth / 2 + 0.8 });
+
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(building.geometry, 18),
+          new THREE.LineBasicMaterial({ color: 0x163b35, transparent: true, opacity: 0.45 }),
+        );
+        building.add(edges);
+
+        const windowGeometry = new THREE.PlaneGeometry(0.72, 0.42);
+        const windowColors = [0x73ffd0, 0xffc66b, 0x62b8ff, 0xff5aa9];
+        const windowCount = Math.min(32, Math.floor(height / 4.5) * 2);
+        for (let index = 0; index < windowCount; index += 1) {
+          if (random() < 0.24) continue;
+          const color = windowColors[Math.floor(random() * windowColors.length)];
+          const windowMaterial = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.45 + random() * 0.5,
+          });
+          neonMaterials.push(windowMaterial);
+          const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+          const floor = 3 + Math.floor(random() * Math.max(1, Math.floor((height - 5) / 3))) * 3;
+          const front = random() > 0.5;
+          if (front) {
+            windowMesh.position.set((random() - 0.5) * (width - 2), floor, depth / 2 + 0.011);
+          } else {
+            windowMesh.position.set((random() - 0.5) * (width - 2), floor, -depth / 2 - 0.011);
+            windowMesh.rotation.y = Math.PI;
+          }
+          building.add(windowMesh);
+        }
+
+        if (height > 62 && random() > 0.55) {
+          const antennaMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f77 });
+          neonMaterials.push(antennaMaterial);
+          const antenna = new THREE.Mesh(
+            new THREE.BoxGeometry(0.16, 8 + random() * 8, 0.16),
+            antennaMaterial,
+          );
+          antenna.position.y = height / 2 + antenna.geometry.parameters.height / 2;
+          building.add(antenna);
+        }
+      }
+
+      for (let blockX = -cityRadius; blockX <= cityRadius; blockX += 1) {
+        for (let blockZ = -cityRadius; blockZ <= cityRadius; blockZ += 1) {
+          if (blockX === 0 && blockZ === 0) continue;
+          const centerX = blockX * blockSize;
+          const centerZ = blockZ * blockSize;
+          const split = random() > 0.42;
+          const count = split ? 2 : 1;
+          for (let index = 0; index < count; index += 1) {
+            const width = count === 1 ? 15 + random() * 6 : 7 + random() * 4;
+            const depth = 13 + random() * 8;
+            const offsetX = count === 1 ? 0 : (index === 0 ? -1 : 1) * 5.8;
+            const heightBoost = 1 - Math.min(0.55, Math.hypot(blockX, blockZ) / 20);
+            const height = 20 + random() * random() * 95 * heightBoost;
+            createBuilding(
+              centerX + offsetX,
+              centerZ,
+              width,
+              depth,
+              height,
+              0.46 + random() * 0.12,
+            );
+          }
+        }
+      }
+
+      const laneMaterial = new THREE.LineBasicMaterial({
+        color: 0x396957,
+        transparent: true,
+        opacity: 0.42,
+      });
+      const lanePoints = [];
+      for (let line = -cityRadius; line <= cityRadius; line += 1) {
+        const position = line * blockSize - blockSize / 2;
+        lanePoints.push(
+          new THREE.Vector3(position, 0.03, -240),
+          new THREE.Vector3(position, 0.03, 240),
+        );
+        lanePoints.push(
+          new THREE.Vector3(-240, 0.03, position),
+          new THREE.Vector3(240, 0.03, position),
+        );
+      }
+      scene.add(
+        new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(lanePoints), laneMaterial),
+      );
+
+      const towerMaterial = new THREE.MeshBasicMaterial({ color: 0xa4ffe0 });
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.45, 18, 5), towerMaterial);
+      tower.position.set(0, 9, -5);
+      scene.add(tower);
+      const beacon = new THREE.Mesh(
+        new THREE.SphereGeometry(0.8, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xff517f }),
+      );
+      beacon.position.set(0, 18.3, -5);
+      scene.add(beacon);
+
+      function resize() {
+        const scale = Math.min(devicePixelRatio, 2);
+        display.width = Math.floor(innerWidth * scale);
+        display.height = Math.floor(innerHeight * scale);
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+
+        cellHeight = innerWidth < 600 ? 11 : 12;
+        cellWidth = cellHeight * 0.6;
+        columns = Math.max(52, Math.floor(innerWidth / cellWidth));
+        rows = Math.max(34, Math.floor(innerHeight / cellHeight));
+        sampleCanvas.width = columns;
+        sampleCanvas.height = rows;
+        renderer.setSize(columns, rows, false);
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        context.font = `${cellHeight}px "SFMono-Regular", Consolas, monospace`;
+        context.textBaseline = "top";
+      }
+
+      function isWalkable(x, z) {
+        if (Math.abs(x) > 225 || Math.abs(z) > 225) return false;
+        return !buildings.some(
+          (building) =>
+            Math.abs(x - building.x) < building.halfWidth &&
+            Math.abs(z - building.z) < building.halfDepth,
+        );
+      }
+
+      function updateMovement(delta) {
+        const forwardAmount =
+          Number(keys.has("KeyW") || keys.has("ArrowUp")) -
+          Number(keys.has("KeyS") || keys.has("ArrowDown"));
+        const sideAmount = Number(keys.has("KeyD")) - Number(keys.has("KeyA"));
+        const turnAmount = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
+        yaw -= turnAmount * delta * 1.4;
+
+        const speed = (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 16 : 8) * delta;
+        const forwardX = -Math.sin(yaw);
+        const forwardZ = -Math.cos(yaw);
+        const rightX = Math.cos(yaw);
+        const rightZ = -Math.sin(yaw);
+        const length = Math.hypot(forwardAmount, sideAmount) || 1;
+        const nextX =
+          camera.position.x + ((forwardX * forwardAmount + rightX * sideAmount) / length) * speed;
+        const nextZ =
+          camera.position.z + ((forwardZ * forwardAmount + rightZ * sideAmount) / length) * speed;
+        if (isWalkable(nextX, camera.position.z)) camera.position.x = nextX;
+        if (isWalkable(camera.position.x, nextZ)) camera.position.z = nextZ;
+
+        const walking = forwardAmount !== 0 || sideAmount !== 0;
+        const bob = walking && !reducedMotion ? Math.sin(clock.elapsedTime * 9) * 0.035 : 0;
+        camera.position.y = 2.3 + bob;
+        camera.rotation.set(pitch, yaw, 0);
+      }
+
+      function colorCode(red, green, blue) {
+        if (red > green * 1.25 && red > blue * 1.15)
+          return red > 175 && green > 90 ? "amber" : "pink";
+        if (blue > red * 1.25 && blue > green * 0.86) return "blue";
+        return "green";
+      }
+
+      const palettes = {
+        green: [105, 255, 190],
+        amber: [255, 196, 105],
+        pink: [255, 91, 151],
+        blue: [103, 190, 255],
+      };
+      const characterRamp = " .,:;i1tfLCG08@";
+
+      function drawAscii(time) {
+        renderer.render(scene, camera);
+        sampleContext.drawImage(renderer.domElement, 0, 0, columns, rows);
+        const pixels = sampleContext.getImageData(0, 0, columns, rows).data;
+        context.fillStyle = "#020608";
+        context.fillRect(0, 0, innerWidth, innerHeight);
+
+        for (let row = 0; row < rows; row += 1) {
+          let run = "";
+          let runColor = "green";
+          let runStart = 0;
+          const flush = (end) => {
+            if (!run) return;
+            const [red, green, blue] = palettes[runColor];
+            const pulse = runColor === "green" ? 0.9 : 0.78 + Math.sin(time * 0.002 + row) * 0.12;
+            context.fillStyle = `rgb(${red * pulse} ${green * pulse} ${blue * pulse})`;
+            context.fillText(run, runStart * cellWidth, row * cellHeight);
+            run = "";
+            runStart = end;
+          };
+
+          for (let column = 0; column < columns; column += 1) {
+            const pixel = (row * columns + column) * 4;
+            const red = pixels[pixel];
+            const green = pixels[pixel + 1];
+            const blue = pixels[pixel + 2];
+            const brightness = red * 0.28 + green * 0.55 + blue * 0.17;
+            const glyphIndex = Math.min(
+              characterRamp.length - 1,
+              Math.floor((brightness / 255) * characterRamp.length * 1.55),
+            );
+            const nextColor = brightness > 45 ? colorCode(red, green, blue) : "green";
+            if (nextColor !== runColor) {
+              flush(column);
+              runColor = nextColor;
+            }
+            run += characterRamp[glyphIndex];
+          }
+          flush(columns);
+        }
+      }
+
+      function animate(time) {
+        requestAnimationFrame(animate);
+        const delta = Math.min(clock.getDelta(), 0.05);
+        updateMovement(delta);
+        beacon.scale.setScalar(0.9 + Math.sin(time * 0.004) * 0.15);
+        neonMaterials.forEach((material, index) => {
+          if (index % 29 === 0) material.opacity = 0.48 + Math.sin(time * 0.003 + index) * 0.28;
+        });
+        coordinates.innerHTML = `X ${camera.position.x.toFixed(1).padStart(5, "0")}<br>Z ${camera.position.z.toFixed(1).padStart(5, "0")}`;
+        if (time - lastRender > 30) {
+          drawAscii(time);
+          lastRender = time;
+        }
+      }
+
+      addEventListener("resize", resize);
+      addEventListener("keydown", (event) => {
+        keys.add(event.code);
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(event.code))
+          event.preventDefault();
+      });
+      addEventListener("keyup", (event) => keys.delete(event.code));
+      addEventListener("blur", () => keys.clear());
+
+      enterButton.addEventListener("click", () => {
+        enterButton.hidden = true;
+        if (!coarsePointer) display.requestPointerLock();
+      });
+      display.addEventListener("click", () => {
+        if (!coarsePointer && document.pointerLockElement !== display) display.requestPointerLock();
+      });
+      document.addEventListener("pointerlockchange", () => {
+        enterButton.hidden = document.pointerLockElement === display;
+      });
+      document.addEventListener("mousemove", (event) => {
+        if (document.pointerLockElement !== display) return;
+        yaw -= event.movementX * 0.0022;
+        pitch = THREE.MathUtils.clamp(pitch - event.movementY * 0.0018, -1.15, 1.15);
+      });
+
+      display.addEventListener("pointerdown", (event) => {
+        if (!coarsePointer || event.target.closest?.("button")) return;
+        touchLookId = event.pointerId;
+        touchX = event.clientX;
+        touchY = event.clientY;
+        display.setPointerCapture(event.pointerId);
+        enterButton.hidden = true;
+      });
+      display.addEventListener("pointermove", (event) => {
+        if (event.pointerId !== touchLookId) return;
+        yaw -= (event.clientX - touchX) * 0.006;
+        pitch = THREE.MathUtils.clamp(pitch - (event.clientY - touchY) * 0.004, -1.05, 1.05);
+        touchX = event.clientX;
+        touchY = event.clientY;
+      });
+      display.addEventListener("pointerup", (event) => {
+        if (event.pointerId === touchLookId) touchLookId = null;
+      });
+
+      const touchKeyMap = { forward: "KeyW", back: "KeyS", left: "ArrowLeft", right: "ArrowRight" };
+      document.querySelectorAll(".touch-controls button").forEach((button) => {
+        const code = touchKeyMap[button.dataset.key];
+        const release = (event) => {
+          event.preventDefault();
+          keys.delete(code);
+        };
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          keys.add(code);
+          button.setPointerCapture(event.pointerId);
+        });
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+      });
+
+      resize();
+      requestAnimationFrame(animate);
+    </script>
+  </body>
+</html>
