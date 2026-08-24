@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="data:," />
-    <meta name="description" content="A 24-hour watch dial where one rotation is one whole life." />
+    <meta name="description" content="A whole life, shown as one 24-hour day." />
     <title>Once Around</title>
     <!--
       A life as a single 24-hour day. Companion to the life-calendar sketch,
@@ -14,9 +14,8 @@
       The dial follows the Soviet Raketa "Polar" (Полярные), a 24-hour watch
       built for Antarctic expedition crews: 0 at the top, 12 at the bottom, one
       rotation per day. A 12-hour dial would put 9am and 9pm in the same place.
-      Minute track, markers, polar grid, ribbon, mountains and Cyrillic are
-      all the original's. Broad hand is the life, red seconds hand is the
-      current time of day on the same scale.
+      Broad hand is the life, red seconds hand is the current time of day on
+      the same scale.
 
       The clock nods to the cover of John Mayer's Born and Raised: reverse-
       painted glass by David Adrian Smith, lettering in coins, faces and clocks.
@@ -26,21 +25,25 @@
     -->
     <style>
       :root {
-        --black: rgb(23, 23, 23);
-        --gray: rgba(23, 23, 23, 0.55);
-        --rule: rgba(23, 23, 23, 0.18);
+        --blue: #1f30c8;
+        --paper: #f2f5fc;
+        --muted: rgba(242, 245, 252, 0.66);
+        --rule: rgba(242, 245, 252, 0.35);
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        background: var(--blue);
+      }
+
       body {
-        max-width: 560px;
-        margin: 0 auto;
-        padding: 64px 20px 120px;
-        background: #fff;
-        color: var(--black);
+        min-height: 100svh;
+        margin: 0;
+        background: var(--blue);
+        color: var(--paper);
         font-family:
           "Gill Sans",
           -apple-system,
@@ -50,109 +53,149 @@
           Helvetica,
           Arial,
           sans-serif;
-        text-align: center;
+      }
+
+      .page {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100svh;
+        padding: clamp(24px, 4vw, 52px);
       }
 
       h1 {
-        margin: 0 0 4px;
-        font-size: 13px;
+        margin: 0;
+        font-size: 12px;
         font-weight: 600;
-        letter-spacing: 3px;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
       }
 
-      .standfirst {
-        margin: 0 0 44px;
-        color: var(--gray);
-        font-size: 13px;
-        font-variant: small-caps;
-        letter-spacing: 1px;
+      main {
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: clamp(16px, 3vh, 28px);
+        padding-block: 28px;
       }
 
-      .watch {
-        width: min(78vmin, 400px);
+      .dial {
+        display: block;
+        width: min(64vmin, 470px);
+        height: auto;
+      }
+
+      .reading {
+        text-align: center;
       }
 
       .clock {
-        margin: 44px 0 0;
-        font-size: 62px;
-        font-weight: 300;
-        letter-spacing: 2px;
+        margin: 0;
+        font-size: clamp(48px, 8vw, 84px);
+        font-weight: 400;
+        letter-spacing: -0.04em;
         line-height: 1;
         font-variant-numeric: tabular-nums;
       }
 
-      .clock + p {
-        margin: 10px 0 0;
-        color: var(--gray);
-        font-size: 13px;
-        font-variant: small-caps;
-        letter-spacing: 1px;
-      }
-
-      dl {
-        display: flex;
-        justify-content: center;
-        gap: 48px;
-        margin: 44px 0 0;
-        padding-top: 22px;
-        border-top: 1px solid var(--rule);
-      }
-
-      dt {
-        color: var(--gray);
-        font-size: 11px;
-        font-variant: small-caps;
-        letter-spacing: 1px;
-      }
-
-      dd {
-        margin: 3px 0 0;
-        font-size: 17px;
+      .summary {
+        margin: 9px 0 0;
+        color: var(--muted);
+        font-size: 14px;
         font-variant-numeric: tabular-nums;
+      }
+
+      footer {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 32px;
       }
 
       form {
         display: flex;
-        justify-content: center;
-        gap: 32px;
-        margin-top: 40px;
+        gap: 24px;
       }
 
       label {
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        color: var(--gray);
-        font-size: 11px;
-        font-variant: small-caps;
-        letter-spacing: 1px;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
       }
 
       input {
-        width: 124px;
-        padding: 3px 0;
+        width: 118px;
+        padding: 0 0 5px;
         border: 0;
         border-bottom: 1px solid var(--rule);
         border-radius: 0;
         background: none;
-        color: var(--black);
+        color: var(--paper);
+        color-scheme: dark;
         font: inherit;
-        font-size: 15px;
+        font-size: 14px;
+        font-weight: 400;
+        letter-spacing: 0;
         font-variant-numeric: tabular-nums;
-        text-align: center;
+        text-transform: none;
       }
 
       input:focus-visible {
-        border-bottom-color: var(--black);
+        border-bottom-color: var(--paper);
         outline: none;
+      }
+
+      .scale {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
       }
 
       /* The dial keeps the original's grotesque. */
       .print {
         font-family: Helvetica, Arial, sans-serif;
         font-weight: 700;
-        fill: #f2f5fc;
+        fill: var(--paper);
+      }
+
+      @media (max-width: 620px) {
+        .page {
+          padding: 24px 20px 28px;
+        }
+
+        .dial {
+          width: min(82vw, 390px);
+        }
+
+        footer {
+          align-items: start;
+          flex-direction: column;
+          gap: 18px;
+        }
+
+        .scale {
+          order: -1;
+        }
+      }
+
+      @media (max-height: 760px) and (min-width: 621px) {
+        .dial {
+          width: min(48vh, 400px);
+        }
+
+        main {
+          gap: 14px;
+          padding-block: 16px;
+        }
+
+        .clock {
+          font-size: 52px;
+        }
       }
 
       @media print {
@@ -164,95 +207,58 @@
   </head>
 
   <body>
-    <h1>Once Around</h1>
-    <p class="standfirst">a whole life as one day</p>
+    <div class="page">
+      <header><h1>Once Around</h1></header>
 
-    <svg class="watch" viewBox="0 0 448 440" role="img" aria-labelledby="caption">
-      <title id="caption">A 24-hour polar watch dial showing one life as a single day</title>
-      <defs>
-        <linearGradient id="steel" x1="0.14" y1="0.02" x2="0.86" y2="0.98">
-          <stop offset="0" stop-color="#fdfdfe" />
-          <stop offset="0.16" stop-color="#a7adb8" />
-          <stop offset="0.38" stop-color="#eef0f4" />
-          <stop offset="0.58" stop-color="#787e8a" />
-          <stop offset="0.79" stop-color="#d8dce3" />
-          <stop offset="1" stop-color="#5d626d" />
-        </linearGradient>
-        <linearGradient id="steel-rim" x1="0.5" y1="0" x2="0.5" y2="1">
-          <stop offset="0" stop-color="#f2f4f8" />
-          <stop offset="0.34" stop-color="#c3c9d3" />
-          <stop offset="0.68" stop-color="#8b919d" />
-          <stop offset="1" stop-color="#c8ced8" />
-        </linearGradient>
+      <main>
+        <svg class="dial" viewBox="40 44 352 352" role="img" aria-labelledby="caption">
+          <title id="caption">A 24-hour polar dial showing one life as a single day</title>
+          <defs>
+            <path id="arc-brand" d="" />
+            <path id="arc-made" d="" />
+            <clipPath id="dial-clip">
+              <circle cx="216" cy="220" r="168" />
+            </clipPath>
+          </defs>
 
-        <filter id="cast-shadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow
-            dx="0"
-            dy="9"
-            stdDeviation="12"
-            flood-color="#0b1020"
-            flood-opacity="0.26"
-          />
-        </filter>
+          <g id="dial" clip-path="url(#dial-clip)"></g>
+          <g id="hands"></g>
+        </svg>
 
-        <!-- Hands sit above the dial. -->
-        <filter id="hand-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow
-            dx="1.4"
-            dy="2.6"
-            stdDeviation="1.5"
-            flood-color="#040a2a"
-            flood-opacity="0.5"
-          />
-        </filter>
+        <div class="reading">
+          <p class="clock" id="life-time">--:--</p>
+          <p class="summary"><span id="age">--</span> old · <span id="elapsed">--</span> elapsed</p>
+        </div>
+      </main>
 
-        <path id="arc-brand" d="" />
-        <path id="arc-made" d="" />
-        <clipPath id="dial-clip">
-          <circle cx="216" cy="220" r="168" />
-        </clipPath>
-      </defs>
-
-      <g id="case" filter="url(#cast-shadow)"></g>
-      <g id="dial" clip-path="url(#dial-clip)"></g>
-      <g id="hands" filter="url(#hand-shadow)"></g>
-    </svg>
-
-    <p class="clock" id="life-time">--:--</p>
-    <p>your time of day</p>
-
-    <dl>
-      <div>
-        <dt>age</dt>
-        <dd id="age">--</dd>
-      </div>
-      <div>
-        <dt>elapsed</dt>
-        <dd id="elapsed">--</dd>
-      </div>
-      <div>
-        <dt>one dial minute</dt>
-        <dd id="scale">--</dd>
-      </div>
-    </dl>
-
-    <form id="controls" autocomplete="off">
-      <label>
-        date of birth
-        <input type="date" id="dob" required />
-      </label>
-      <label>
-        life expectancy
-        <input type="number" id="le" min="1" max="150" step="0.1" required />
-      </label>
-    </form>
+      <footer>
+        <form id="controls" autocomplete="off">
+          <label>
+            Born
+            <input type="date" id="dob" required />
+          </label>
+          <label>
+            Lifespan
+            <input
+              type="number"
+              id="le"
+              min="1"
+              max="150"
+              step="0.1"
+              required
+              aria-label="Expected lifespan in years"
+            />
+          </label>
+        </form>
+        <p class="scale">1 dial minute = <span id="scale">--</span></p>
+      </footer>
+    </div>
 
     <script type="module">
       const DAY_MS = 24 * 60 * 60 * 1000;
       const YEAR_MS = 365.2425 * DAY_MS;
       const SVG_NS = "http://www.w3.org/2000/svg";
       const CENTRE = { x: 216, y: 220 };
-      const DIAL_R = 168;
       // The globe's outer parallel, and the ring the hour markers sit on.
       const GLOBE_R = 93;
       // The dial is printed in one weight throughout.
@@ -305,98 +311,11 @@
         return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${sweep} 1 ${end.x} ${end.y}`;
       }
 
-      function chromeTone(degrees, phase, contrast) {
-        const a = (degrees * Math.PI) / 180;
-        const banding =
-          0.58 +
-          0.26 * Math.sin(2 * a + phase) +
-          0.13 * Math.sin(4 * a + phase * 1.7) +
-          0.05 * Math.sin(6 * a);
-        const l = Math.pow(Math.min(Math.max(banding, 0.2), 1), contrast);
-        return `rgb(${76 + 176 * l} ${82 + 172 * l} ${92 + 162 * l})`;
-      }
-
-      function chromeRing(parent, innerR, outerR, phase, contrast) {
-        const steps = 120;
-        for (let i = 0; i < steps; i++) {
-          const from = (i / steps) * 360;
-          const to = ((i + 1) / steps) * 360 + 0.5;
-          const a = atAngle(from, outerR);
-          const b = atAngle(to, outerR);
-          const c = atAngle(to, innerR);
-          const d = atAngle(from, innerR);
-          parent.append(
-            node("path", {
-              d: `M ${a.x} ${a.y} A ${outerR} ${outerR} 0 0 1 ${b.x} ${b.y}
-                  L ${c.x} ${c.y} A ${innerR} ${innerR} 0 0 0 ${d.x} ${d.y} Z`,
-              fill: chromeTone(from, phase, contrast),
-            }),
-          );
-        }
-      }
-
       // Anticlockwise arc, for text running left to right along the bottom.
       function arcPathBack(fromDegrees, toDegrees, radius) {
         const start = atAngle(fromDegrees, radius);
         const end = atAngle(toDegrees, radius);
         return `M ${start.x} ${start.y} A ${radius} ${radius} 0 0 0 ${end.x} ${end.y}`;
-      }
-
-      function drawCase() {
-        const box = document.getElementById("case");
-        // Four lug stubs on the diagonals, as on the Komandirskie-style case.
-        for (const angle of [45, 135, 225, 315]) {
-          box.append(
-            node("rect", {
-              x: -30,
-              y: -216,
-              width: 60,
-              height: 68,
-              rx: 4,
-              fill: "url(#steel-rim)",
-              transform: `translate(${CENTRE.x} ${CENTRE.y}) rotate(${angle})`,
-            }),
-          );
-        }
-        // Crown at 6, where 3 sits on a 12-hour watch.
-        box.append(
-          node("rect", {
-            x: CENTRE.x + 194,
-            y: CENTRE.y - 17,
-            width: 26,
-            height: 34,
-            rx: 4,
-            fill: "url(#steel-rim)",
-          }),
-        );
-        for (let knurl = 1; knurl < 6; knurl++) {
-          box.append(
-            node("line", {
-              x1: CENTRE.x + 194 + knurl * 4.3,
-              y1: CENTRE.y - 15,
-              x2: CENTRE.x + 194 + knurl * 4.3,
-              y2: CENTRE.y + 15,
-              stroke: "#5c626d",
-              "stroke-width": 1,
-              "stroke-opacity": 0.5,
-            }),
-          );
-        }
-        chromeRing(box, 176, 196, 0.6, 1.15);
-        chromeRing(box, 169, 177, 2.5, 0.95);
-        box.append(
-          node("circle", {
-            cx: CENTRE.x,
-            cy: CENTRE.y,
-            r: 196,
-            fill: "none",
-            stroke: "#3d434e",
-            "stroke-width": 1.2,
-            "stroke-opacity": 0.55,
-          }),
-          node("circle", { cx: CENTRE.x, cy: CENTRE.y, r: 169, fill: "#414855" }),
-          node("circle", { cx: CENTRE.x, cy: CENTRE.y, r: DIAL_R, fill: DIAL }),
-        );
       }
 
       function drawMinuteTrack(dial) {
@@ -677,7 +596,6 @@
       }
 
       const dial = document.getElementById("dial");
-      drawCase();
       drawPolarGrid(dial);
       drawRibbon(dial);
       drawLandscape(dial);
