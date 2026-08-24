@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="data:," />
+    <meta name="description" content="A 24-hour watch dial where one rotation is one whole life." />
+    <title>Once Around</title>
+    <!--
+      A life as a single 24-hour day. Companion to the life-calendar sketch,
+      which counts the same span in weeks.
+
+      The dial follows the Soviet Raketa "Polar" (Полярные), a 24-hour watch
+      built for Antarctic expedition crews: 0 at the top, 12 at the bottom, one
+      rotation per day. A 12-hour dial would put 9am and 9pm in the same place.
+      Minute track, markers, polar grid, ribbon, mountains and Cyrillic are
+      all the original's. Broad hand is the life, red seconds hand is the
+      current time of day on the same scale.
+
+      The clock nods to the cover of John Mayer's Born and Raised: reverse-
+      painted glass by David Adrian Smith, lettering in coins, faces and clocks.
+
+      Defaults to born 1994 and 81.1 years, the period life expectancy for an
+      Australian male (ABS 2021-2023). Override with ?dob=YYYY-MM-DD and ?le=
+    -->
+    <style>
+      :root {
+        --black: rgb(23, 23, 23);
+        --gray: rgba(23, 23, 23, 0.55);
+        --rule: rgba(23, 23, 23, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 64px 20px 120px;
+        background: #fff;
+        color: var(--black);
+        font-family:
+          "Gill Sans",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+      }
+
+      .standfirst {
+        margin: 0 0 44px;
+        color: var(--gray);
+        font-size: 13px;
+        font-variant: small-caps;
+        letter-spacing: 1px;
+      }
+
+      .watch {
+        width: min(78vmin, 400px);
+      }
+
+      .clock {
+        margin: 44px 0 0;
+        font-size: 62px;
+        font-weight: 300;
+        letter-spacing: 2px;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .clock + p {
+        margin: 10px 0 0;
+        color: var(--gray);
+        font-size: 13px;
+        font-variant: small-caps;
+        letter-spacing: 1px;
+      }
+
+      dl {
+        display: flex;
+        justify-content: center;
+        gap: 48px;
+        margin: 44px 0 0;
+        padding-top: 22px;
+        border-top: 1px solid var(--rule);
+      }
+
+      dt {
+        color: var(--gray);
+        font-size: 11px;
+        font-variant: small-caps;
+        letter-spacing: 1px;
+      }
+
+      dd {
+        margin: 3px 0 0;
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      form {
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        margin-top: 40px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--gray);
+        font-size: 11px;
+        font-variant: small-caps;
+        letter-spacing: 1px;
+      }
+
+      input {
+        width: 124px;
+        padding: 3px 0;
+        border: 0;
+        border-bottom: 1px solid var(--rule);
+        border-radius: 0;
+        background: none;
+        color: var(--black);
+        font: inherit;
+        font-size: 15px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+
+      input:focus-visible {
+        border-bottom-color: var(--black);
+        outline: none;
+      }
+
+      /* The dial keeps the original's grotesque. */
+      .print {
+        font-family: Helvetica, Arial, sans-serif;
+        font-weight: 700;
+        fill: #f2f5fc;
+      }
+
+      @media print {
+        form {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Once Around</h1>
+    <p class="standfirst">a whole life as one day</p>
+
+    <svg class="watch" viewBox="0 0 448 440" role="img" aria-labelledby="caption">
+      <title id="caption">A 24-hour polar watch dial showing one life as a single day</title>
+      <defs>
+        <linearGradient id="steel" x1="0.14" y1="0.02" x2="0.86" y2="0.98">
+          <stop offset="0" stop-color="#fdfdfe" />
+          <stop offset="0.16" stop-color="#a7adb8" />
+          <stop offset="0.38" stop-color="#eef0f4" />
+          <stop offset="0.58" stop-color="#787e8a" />
+          <stop offset="0.79" stop-color="#d8dce3" />
+          <stop offset="1" stop-color="#5d626d" />
+        </linearGradient>
+        <linearGradient id="steel-rim" x1="0.5" y1="0" x2="0.5" y2="1">
+          <stop offset="0" stop-color="#f2f4f8" />
+          <stop offset="0.34" stop-color="#c3c9d3" />
+          <stop offset="0.68" stop-color="#8b919d" />
+          <stop offset="1" stop-color="#c8ced8" />
+        </linearGradient>
+
+        <filter id="cast-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow
+            dx="0"
+            dy="9"
+            stdDeviation="12"
+            flood-color="#0b1020"
+            flood-opacity="0.26"
+          />
+        </filter>
+
+        <!-- Hands sit above the dial. -->
+        <filter id="hand-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow
+            dx="1.4"
+            dy="2.6"
+            stdDeviation="1.5"
+            flood-color="#040a2a"
+            flood-opacity="0.5"
+          />
+        </filter>
+
+        <path id="arc-brand" d="" />
+        <path id="arc-made" d="" />
+        <clipPath id="dial-clip">
+          <circle cx="216" cy="220" r="168" />
+        </clipPath>
+      </defs>
+
+      <g id="case" filter="url(#cast-shadow)"></g>
+      <g id="dial" clip-path="url(#dial-clip)"></g>
+      <g id="hands" filter="url(#hand-shadow)"></g>
+    </svg>
+
+    <p class="clock" id="life-time">--:--</p>
+    <p>your time of day</p>
+
+    <dl>
+      <div>
+        <dt>age</dt>
+        <dd id="age">--</dd>
+      </div>
+      <div>
+        <dt>elapsed</dt>
+        <dd id="elapsed">--</dd>
+      </div>
+      <div>
+        <dt>one dial minute</dt>
+        <dd id="scale">--</dd>
+      </div>
+    </dl>
+
+    <form id="controls" autocomplete="off">
+      <label>
+        date of birth
+        <input type="date" id="dob" required />
+      </label>
+      <label>
+        life expectancy
+        <input type="number" id="le" min="1" max="150" step="0.1" required />
+      </label>
+    </form>
+
+    <script type="module">
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const YEAR_MS = 365.2425 * DAY_MS;
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const CENTRE = { x: 216, y: 220 };
+      const DIAL_R = 168;
+      // The globe's outer parallel, and the ring the hour markers sit on.
+      const GLOBE_R = 93;
+      // The dial is printed in one weight throughout.
+      const PRINT = "#eef2fd";
+      const PRINT_W = 1.3;
+      // Cap height of the dial face, as a fraction of its size.
+      const CAP_HEIGHT = 0.717;
+      const DIAL = "#1f30c8";
+
+      const params = new URL(document.location).searchParams;
+      const state = {
+        // Matches the default birth date used by the life-calendar sketch.
+        dob: parseDate(params.get("dob")) ?? new Date(1994, 3, 8),
+        // Cohort tables put this nearer 82.5, about ten minutes earlier on the dial.
+        le: Number(params.get("le")) || 81.1,
+      };
+
+      function parseDate(value) {
+        if (!value) return null;
+        const parsed = new Date(`${value}T00:00:00`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+
+      function node(tag, attributes = {}, text) {
+        const created = document.createElementNS(SVG_NS, tag);
+        for (const [name, value] of Object.entries(attributes)) {
+          created.setAttribute(name, value);
+        }
+        if (text !== undefined) created.textContent = text;
+        return created;
+      }
+
+      // 0 at the top, clockwise, one rotation per 24 hours.
+      function atHour(hour, radius) {
+        return atAngle((hour / 24) * 360, radius);
+      }
+
+      function atAngle(degrees, radius) {
+        const radians = ((degrees - 90) * Math.PI) / 180;
+        return {
+          x: CENTRE.x + Math.cos(radians) * radius,
+          y: CENTRE.y + Math.sin(radians) * radius,
+        };
+      }
+
+      function arcPath(fromDegrees, toDegrees, radius) {
+        const start = atAngle(fromDegrees, radius);
+        const end = atAngle(toDegrees, radius);
+        const sweep = toDegrees - fromDegrees > 180 ? 1 : 0;
+        return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${sweep} 1 ${end.x} ${end.y}`;
+      }
+
+      function chromeTone(degrees, phase, contrast) {
+        const a = (degrees * Math.PI) / 180;
+        const banding =
+          0.58 +
+          0.26 * Math.sin(2 * a + phase) +
+          0.13 * Math.sin(4 * a + phase * 1.7) +
+          0.05 * Math.sin(6 * a);
+        const l = Math.pow(Math.min(Math.max(banding, 0.2), 1), contrast);
+        return `rgb(${76 + 176 * l} ${82 + 172 * l} ${92 + 162 * l})`;
+      }
+
+      function chromeRing(parent, innerR, outerR, phase, contrast) {
+        const steps = 120;
+        for (let i = 0; i < steps; i++) {
+          const from = (i / steps) * 360;
+          const to = ((i + 1) / steps) * 360 + 0.5;
+          const a = atAngle(from, outerR);
+          const b = atAngle(to, outerR);
+          const c = atAngle(to, innerR);
+          const d = atAngle(from, innerR);
+          parent.append(
+            node("path", {
+              d: `M ${a.x} ${a.y} A ${outerR} ${outerR} 0 0 1 ${b.x} ${b.y}
+                  L ${c.x} ${c.y} A ${innerR} ${innerR} 0 0 0 ${d.x} ${d.y} Z`,
+              fill: chromeTone(from, phase, contrast),
+            }),
+          );
+        }
+      }
+
+      // Anticlockwise arc, for text running left to right along the bottom.
+      function arcPathBack(fromDegrees, toDegrees, radius) {
+        const start = atAngle(fromDegrees, radius);
+        const end = atAngle(toDegrees, radius);
+        return `M ${start.x} ${start.y} A ${radius} ${radius} 0 0 0 ${end.x} ${end.y}`;
+      }
+
+      function drawCase() {
+        const box = document.getElementById("case");
+        // Four lug stubs on the diagonals, as on the Komandirskie-style case.
+        for (const angle of [45, 135, 225, 315]) {
+          box.append(
+            node("rect", {
+              x: -30,
+              y: -216,
+              width: 60,
+              height: 68,
+              rx: 4,
+              fill: "url(#steel-rim)",
+              transform: `translate(${CENTRE.x} ${CENTRE.y}) rotate(${angle})`,
+            }),
+          );
+        }
+        // Crown at 6, where 3 sits on a 12-hour watch.
+        box.append(
+          node("rect", {
+            x: CENTRE.x + 194,
+            y: CENTRE.y - 17,
+            width: 26,
+            height: 34,
+            rx: 4,
+            fill: "url(#steel-rim)",
+          }),
+        );
+        for (let knurl = 1; knurl < 6; knurl++) {
+          box.append(
+            node("line", {
+              x1: CENTRE.x + 194 + knurl * 4.3,
+              y1: CENTRE.y - 15,
+              x2: CENTRE.x + 194 + knurl * 4.3,
+              y2: CENTRE.y + 15,
+              stroke: "#5c626d",
+              "stroke-width": 1,
+              "stroke-opacity": 0.5,
+            }),
+          );
+        }
+        chromeRing(box, 176, 196, 0.6, 1.15);
+        chromeRing(box, 169, 177, 2.5, 0.95);
+        box.append(
+          node("circle", {
+            cx: CENTRE.x,
+            cy: CENTRE.y,
+            r: 196,
+            fill: "none",
+            stroke: "#3d434e",
+            "stroke-width": 1.2,
+            "stroke-opacity": 0.55,
+          }),
+          node("circle", { cx: CENTRE.x, cy: CENTRE.y, r: 169, fill: "#414855" }),
+          node("circle", { cx: CENTRE.x, cy: CENTRE.y, r: DIAL_R, fill: DIAL }),
+        );
+      }
+
+      function drawMinuteTrack(dial) {
+        // 240 notches, four to the minute. The ring stands off the wall, and the
+        // minute notches reach further in, to the numerals.
+        for (let notch = 0; notch < 240; notch++) {
+          const minute = notch % 4 === 0;
+          const degrees = (notch / 240) * 360;
+          const inner = atAngle(degrees, minute ? 144 : 158);
+          const outer = atAngle(degrees, 165);
+          dial.append(
+            node("line", {
+              x1: inner.x,
+              y1: inner.y,
+              x2: outer.x,
+              y2: outer.y,
+              stroke: PRINT,
+              "stroke-width": PRINT_W,
+            }),
+          );
+        }
+        for (let minute = 5; minute <= 60; minute += 5) {
+          const degrees = (minute / 60) * 360;
+          const at = atAngle(degrees, 136);
+          dial.append(
+            node(
+              "text",
+              {
+                class: "print",
+                x: at.x,
+                y: at.y,
+                "font-size": 9,
+                "text-anchor": "middle",
+                "dominant-baseline": "central",
+                transform: `rotate(${degrees} ${at.x} ${at.y})`,
+              },
+              String(minute),
+            ),
+          );
+        }
+      }
+
+      function drawHourNumerals(dial) {
+        for (let hour = 0; hour < 24; hour++) {
+          const at = atHour(hour, 120);
+          dial.append(
+            node(
+              "text",
+              {
+                class: "print",
+                x: at.x,
+                y: at.y,
+                "font-size": 21,
+                "text-anchor": "middle",
+                "dominant-baseline": "central",
+              },
+              String(hour),
+            ),
+          );
+        }
+        for (let hour = 0; hour < 24; hour++) {
+          const at = atHour(hour, GLOBE_R);
+          const onGrid = hour <= 6 || hour >= 18;
+          dial.append(
+            onGrid
+              ? node("circle", { cx: at.x, cy: at.y, r: 4, fill: PRINT })
+              : node("path", {
+                  d: "M 0 -5.8 L 3.5 0 L 0 5.8 L -3.5 0 Z",
+                  fill: PRINT,
+                  transform: `translate(${at.x} ${at.y}) rotate(${(hour / 24) * 360})`,
+                }),
+          );
+        }
+      }
+
+      function drawPolarGrid(dial) {
+        // A patch off a globe: meridians converge on a pole at the pivot and bow
+        // away from the centre one, parallels arc across them. The outer parallel
+        // ends on the beaded hour markers.
+        const grid = node("g", {
+          fill: "none",
+          stroke: PRINT,
+          "stroke-width": PRINT_W,
+        });
+        for (let hour = -6; hour <= 6; hour++) {
+          const degrees = (hour / 24) * 360;
+          const start = atHour(hour * 0.45, 8);
+          const control = atAngle(degrees * 0.45, GLOBE_R * 0.58);
+          const end = atAngle(degrees, GLOBE_R);
+          grid.append(
+            node("path", {
+              d: `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`,
+            }),
+          );
+        }
+        for (const radius of [24, 41, 58, 75, GLOBE_R]) {
+          grid.append(node("path", { d: arcPath(-90, 90, radius) }));
+        }
+        dial.append(grid);
+      }
+
+      function drawRibbon(dial) {
+        const outer = 74;
+        const inner = 57;
+        const span = 88;
+        const a = atAngle(-span / 2, outer);
+        const b = atAngle(span / 2, outer);
+        const c = atAngle(span / 2, inner);
+        const d = atAngle(-span / 2, inner);
+        dial.append(
+          node("path", {
+            d: `M ${a.x} ${a.y} A ${outer} ${outer} 0 0 1 ${b.x} ${b.y}
+                L ${c.x} ${c.y} A ${inner} ${inner} 0 0 0 ${d.x} ${d.y} Z`,
+            fill: DIAL,
+            stroke: PRINT,
+            "stroke-width": PRINT_W,
+            "stroke-linejoin": "round",
+          }),
+        );
+        // Cap height runs a little over half the band, as on the original.
+        const size = ((outer - inner) * 0.58) / CAP_HEIGHT;
+        fitToArc(dial, "arc-brand", "ПОЛЯРНЫЕ", size, span, (outer + inner) / 2, true);
+      }
+
+      // Seat a line of text in the middle of an arc band, shrinking it only if
+      // it would overrun. Glyphs grow away from the baseline, so the arc itself
+      // sits half a cap height off centre, outward at the top and inward at the
+      // bottom where the text is the other way up.
+      function fitToArc(dial, pathId, words, size, span, midRadius, atTop) {
+        const path = document.getElementById(pathId);
+        const label = node("text", { class: "print", "font-size": size });
+        const textPath = node("textPath", {
+          href: `#${pathId}`,
+          startOffset: "50%",
+          "text-anchor": "middle",
+        });
+        textPath.textContent = words;
+        label.append(textPath);
+        dial.append(label);
+
+        const seat = (radius) =>
+          path.setAttribute(
+            "d",
+            atTop
+              ? arcPath(-span / 2, span / 2, radius)
+              : arcPathBack(180 + span / 2, 180 - span / 2, radius),
+          );
+
+        seat(midRadius);
+        const room = ((span * Math.PI * midRadius) / 180) * 0.88;
+        const width = textPath.getComputedTextLength();
+        if (width > room) {
+          size = (size * room) / width;
+          label.setAttribute("font-size", size);
+        }
+        seat(midRadius + (atTop ? -1 : 1) * CAP_HEIGHT * 0.5 * size);
+      }
+
+      function drawLandscape(dial) {
+        const base = CENTRE.y + 56;
+        const ridge = [
+          [-52, 1],
+          [-36, -14],
+          [-26, -7],
+          [-13, -25],
+          [-2, -42],
+          [7, -22],
+          [15, -30],
+          [24, -13],
+          [35, -20],
+          [46, -3],
+          [54, 1],
+        ];
+        dial.append(
+          node("path", {
+            d: ridge
+              .map(([dx, dy], index) => `${index ? "L" : "M"} ${CENTRE.x + dx} ${base + dy}`)
+              .join(" "),
+            fill: "none",
+            stroke: PRINT,
+            "stroke-width": PRINT_W,
+            "stroke-linejoin": "round",
+          }),
+        );
+        dial.append(
+          node("path", {
+            d: `M ${CENTRE.x - 2} ${base - 42} L ${CENTRE.x + 5} ${base - 17}
+                M ${CENTRE.x + 15} ${base - 30} L ${CENTRE.x + 20} ${base - 14}
+                M ${CENTRE.x - 13} ${base - 25} L ${CENTRE.x - 18} ${base - 10}`,
+            fill: "none",
+            stroke: PRINT,
+            "stroke-width": PRINT_W,
+          }),
+        );
+
+        fitToArc(dial, "arc-made", "СДЕЛАНО В СССР", 10, 72, 80, false);
+      }
+
+      function drawHands() {
+        const hands = document.getElementById("hands");
+        hands.append(
+          // Life hand. Moves about a degree a month.
+          node("path", {
+            id: "hand-life",
+            d: `M -6.5 15 L -5.4 -34 L -4.2 -94 L -2.1 -110 L 0 -116
+                L 2.1 -110 L 4.2 -94 L 5.4 -34 L 6.5 15 Z`,
+            fill: "#f2efe2",
+            stroke: "#14161c",
+            "stroke-width": 1,
+            "stroke-linejoin": "round",
+          }),
+          // Day hand, with the counterweight a seconds hand carries.
+          node("path", {
+            id: "hand-day",
+            d: "M -1 34 L -1 -140 L 1 -140 L 1 34 Z",
+            fill: "#d4212a",
+          }),
+          node("circle", { id: "hand-day-tail", r: 6, fill: "#d4212a" }),
+          node("circle", { cx: CENTRE.x, cy: CENTRE.y, r: 6.5, fill: "#1d2028" }),
+          node("circle", { cx: CENTRE.x, cy: CENTRE.y, r: 2.1, fill: "#c4cad5" }),
+        );
+      }
+
+      function pointHand(id, hour) {
+        const rotation = (hour / 24) * 360;
+        document
+          .getElementById(id)
+          .setAttribute("transform", `translate(${CENTRE.x} ${CENTRE.y}) rotate(${rotation})`);
+      }
+
+      function formatHours(hours) {
+        const whole = Math.floor(hours);
+        const minutes = Math.floor((hours - whole) * 60);
+        return `${String(whole).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+      }
+
+      function formatSpan(ms) {
+        const years = Math.floor(ms / YEAR_MS);
+        const months = Math.floor((ms - years * YEAR_MS) / (YEAR_MS / 12));
+        return `${years}y ${months}m`;
+      }
+
+      function tick() {
+        const now = new Date();
+        const lived = now - state.dob;
+        const lifetime = state.le * YEAR_MS;
+        const fraction = lived / lifetime;
+        const today = (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 3600;
+
+        pointHand("hand-life", fraction * 24);
+        pointHand("hand-day", today);
+        const tail = atHour(today + 12, 24);
+        const tailNode = document.getElementById("hand-day-tail");
+        tailNode.setAttribute("cx", tail.x);
+        tailNode.setAttribute("cy", tail.y);
+
+        document.getElementById("life-time").textContent = formatHours(Math.min(fraction, 1) * 24);
+        document.getElementById("age").textContent = formatSpan(lived);
+        document.getElementById("elapsed").textContent = `${(fraction * 100).toFixed(1)}%`;
+
+        const perMinute = lifetime / 1440 / DAY_MS;
+        document.getElementById("scale").textContent = `${perMinute.toFixed(1)} days`;
+      }
+
+      function bindControls() {
+        const dob = document.getElementById("dob");
+        const le = document.getElementById("le");
+        dob.value = new Date(state.dob.getTime() - state.dob.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 10);
+        le.value = state.le;
+
+        document.getElementById("controls").addEventListener("input", () => {
+          const nextDob = parseDate(dob.value);
+          const nextLe = Number(le.value);
+          if (nextDob) state.dob = nextDob;
+          if (nextLe > 0) state.le = nextLe;
+          tick();
+        });
+      }
+
+      const dial = document.getElementById("dial");
+      drawCase();
+      drawPolarGrid(dial);
+      drawRibbon(dial);
+      drawLandscape(dial);
+      drawMinuteTrack(dial);
+      drawHourNumerals(dial);
+      drawHands();
+      bindControls();
+      tick();
+      setInterval(tick, 1000);
+    </script>
+  </body>
+</html>
