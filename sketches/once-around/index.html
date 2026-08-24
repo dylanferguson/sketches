@@ -400,13 +400,14 @@
       }
 
       function drawMinuteTrack(dial) {
-        // 240 notches, four to the minute. The ring stands off the wall, and the
-        // minute notches reach further in, to the numerals.
+        // 240 notches, four to the minute. They share an inner edge and the
+        // minute notches extend out toward the numbered edge of the track.
         for (let notch = 0; notch < 240; notch++) {
           const minute = notch % 4 === 0;
+          const numbered = notch % 20 === 0;
           const degrees = (notch / 240) * 360;
-          const inner = atAngle(degrees, minute ? 144 : 158);
-          const outer = atAngle(degrees, 165);
+          const inner = atAngle(degrees, 143);
+          const outer = atAngle(degrees, minute && !numbered ? 159 : 152);
           dial.append(
             node("line", {
               x1: inner.x,
@@ -420,7 +421,7 @@
         }
         for (let minute = 5; minute <= 60; minute += 5) {
           const degrees = (minute / 60) * 360;
-          const at = atAngle(degrees, 136);
+          const at = atAngle(degrees, 159);
           dial.append(
             node(
               "text",
@@ -473,9 +474,8 @@
       }
 
       function drawPolarGrid(dial) {
-        // A patch off a globe: meridians converge on a pole at the pivot and bow
-        // away from the centre one, parallels arc across them. The outer parallel
-        // ends on the beaded hour markers.
+        // A patch off a globe: meridians radiate from the pole at the pivot and
+        // parallels arc across them, ending on the beaded hour markers.
         const grid = node("g", {
           fill: "none",
           stroke: PRINT,
@@ -483,12 +483,10 @@
         });
         for (let hour = -6; hour <= 6; hour++) {
           const degrees = (hour / 24) * 360;
-          const start = atHour(hour * 0.45, 8);
-          const control = atAngle(degrees * 0.45, GLOBE_R * 0.58);
           const end = atAngle(degrees, GLOBE_R);
           grid.append(
             node("path", {
-              d: `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`,
+              d: `M ${CENTRE.x} ${CENTRE.y} L ${end.x} ${end.y}`,
             }),
           );
         }
