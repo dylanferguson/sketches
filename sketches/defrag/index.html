@@ -1,0 +1,453 @@
+<!doctype html>
+<!--
+  Generated with Claude Code.
+  Model: Claude Opus 5 (claude-opus-5), the session default — no `model`
+  override is set in .claude/settings.json.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Defrag</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --field: #fff;
+        --scan: rgba(0, 36, 56, 0.16);
+        --edge: rgba(8, 26, 46, 0.11);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        background: var(--field);
+      }
+
+      canvas {
+        position: fixed;
+        z-index: 0;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+        touch-action: none;
+        user-select: none;
+        animation: scene-in 0.6s ease-out;
+        -webkit-user-select: none;
+      }
+
+      /* A little CRT: scanlines and a soft corner falloff, so the block map
+         reads as something seen on a 1998 monitor rather than a flat diagram. */
+      .crt {
+        position: fixed;
+        z-index: 1;
+        inset: 0;
+        background: repeating-linear-gradient(to bottom, transparent 0 2px, var(--scan) 2px 3px);
+        box-shadow: inset 0 0 190px 24px var(--edge);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+
+      @keyframes scene-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        canvas {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas
+      id="scene"
+      role="img"
+      aria-label="A disk defragmenter block map: scattered clusters packing into a solid block"
+    ></canvas>
+    <div class="crt" aria-hidden="true"></div>
+    <script>
+      // Windows 98 Disk Defragmenter, reduced to the only part anyone actually
+      // watched: the block map. The drive is one long array of clusters drawn
+      // left to right, top to bottom. The defragmenter walks it from the
+      // start, and every time it meets a gap it reads a run of clusters from
+      // further along (red) and writes them into the hole (green), so the data
+      // creeps forward and the free space drifts to the end.
+      //
+      // Then the loop closes: a clean drive gets used. Deleting a file punches
+      // a hole in the middle, and the next file written takes the first gaps
+      // that fit and spills the rest at the end. That is the whole story of
+      // fragmentation, and it runs here forever. Click to delete a file
+      // yourself and give the head something to come back for.
+      function initDefrag(canvas) {
+        const FREE = 0;
+        const DATA = 1;
+        const SYS = 2; // unmovable: system files, pinned where they sit
+        const BAD = 3;
+        const READ = 1;
+        const WRITE = 2;
+
+        const STEP_MS = 24; // one simulation tick
+        const RUN_MAX = 6; // clusters carried per read/write pair
+        const READ_TICKS = 8; // how long a red marker lingers after the read
+        const WRITE_TICKS = 5; // ...and a green one after the write
+        const ANALYZE_MS = 900; // opening sweep that paints the map
+        const HOLD_TICKS = 54; // pause on a clean drive before it fills again
+        const CHURN_TICKS = 112; // files written and deleted, refragmenting it
+        const FILL = 0.65; // roughly how much of the drive holds data
+
+        // [face, highlight, shadow] for each raised 3D block.
+        const STATE_COLORS = [];
+        STATE_COLORS[DATA] = ["#2fcfcf", "#a5f2f2", "#0b8686"];
+        STATE_COLORS[SYS] = ["#2b46c0", "#8496ee", "#111c6e"];
+        STATE_COLORS[BAD] = ["#7c1414", "#b45050", "#3a0707"];
+        const MARK_COLORS = [];
+        MARK_COLORS[READ] = ["#e02424", "#ff9a9a", "#7d0e0e"];
+        MARK_COLORS[WRITE] = ["#22a922", "#93ea93", "#0c650c"];
+        const FIELD = "#ffffff";
+
+        const ctx = canvas.getContext("2d", { alpha: false });
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        // Grid geometry, all in device pixels so block edges stay crisp.
+        let COLS, ROWS, N, cellW, cellH, gapX, gapY, bevel;
+        // The drive itself, plus the transient read/write markers over it.
+        let cells, mark, markT;
+        // Only cells that changed get repainted.
+        let dirtyFlag, dirty;
+        let cursor, pending, phase, phaseT, revealed, sysEnd, startTime;
+
+        function randInt(n) {
+          return Math.floor(Math.random() * n);
+        }
+
+        function markDirty(i) {
+          if (dirtyFlag[i]) return;
+          dirtyFlag[i] = 1;
+          dirty.push(i);
+        }
+
+        function setMark(i, kind, ticks) {
+          mark[i] = kind;
+          markT[i] = ticks;
+          markDirty(i);
+        }
+
+        // Markers are hard-edged and step off rather than fading — 1998 had no
+        // alpha to spare.
+        function decayMarks() {
+          for (let i = 0; i < N; i++) {
+            if (!markT[i]) continue;
+            if (--markT[i] === 0) {
+              mark[i] = 0;
+              markDirty(i);
+            }
+          }
+        }
+
+        // One cluster: a raised block, lit from the top left. A marker wins
+        // over the underlying state, so a freed cluster still shows red for a
+        // beat before it turns white.
+        function drawCell(i) {
+          const c = i % COLS;
+          const r = (i / COLS) | 0;
+          const x0 = Math.round(c * cellW);
+          const y0 = Math.round(r * cellH);
+          const w = Math.round((c + 1) * cellW) - x0;
+          const h = Math.round((r + 1) * cellH) - y0;
+          ctx.fillStyle = FIELD;
+          ctx.fillRect(x0, y0, w, h);
+          if (i >= revealed) return;
+          const colors = mark[i] ? MARK_COLORS[mark[i]] : STATE_COLORS[cells[i]];
+          if (!colors) return;
+          const bw = w - gapX;
+          const bh = h - gapY;
+          if (bw <= 0 || bh <= 0) return;
+          ctx.fillStyle = colors[0];
+          ctx.fillRect(x0, y0, bw, bh);
+          ctx.fillStyle = colors[1];
+          ctx.fillRect(x0, y0, bw, bevel);
+          ctx.fillRect(x0, y0, bevel, bh);
+          ctx.fillStyle = colors[2];
+          ctx.fillRect(x0, y0 + bh - bevel, bw, bevel);
+          ctx.fillRect(x0 + bw - bevel, y0, bevel, bh);
+        }
+
+        function render() {
+          for (let k = 0; k < dirty.length; k++) {
+            const i = dirty[k];
+            dirtyFlag[i] = 0;
+            drawCell(i);
+          }
+          dirty.length = 0;
+        }
+
+        function repaintAll() {
+          dirty.length = 0;
+          dirtyFlag.fill(0);
+          for (let i = 0; i < N; i++) markDirty(i);
+          render();
+        }
+
+        // A drive that has been written to and deleted from for years: system
+        // files pinned at the front, then files in runs with gaps between them.
+        function seedDisk() {
+          cells.fill(FREE);
+          mark.fill(0);
+          markT.fill(0);
+          sysEnd = Math.min(N, Math.round(COLS * 1.7));
+          for (let i = 0; i < sysEnd; i++) {
+            if (Math.random() < 0.94) cells[i] = SYS;
+          }
+          // A few more pinned clumps further in, but only where the packed
+          // drive will still reach them — an unmovable block stranded out in
+          // the free tail would just look like a bug.
+          const pinned = Math.max(1, Math.round((N - sysEnd) * 0.4));
+          for (let k = 0; k < 3; k++) {
+            const start = sysEnd + randInt(pinned);
+            const len = 4 + randInt(12);
+            for (let i = start; i < start + len && i < N; i++) cells[i] = SYS;
+          }
+          // Runs and gaps in this ratio land near FILL once averaged out.
+          const run = Math.round((24 * FILL) / (1 - FILL));
+          let i = sysEnd;
+          while (i < N) {
+            const len = 2 + randInt(run);
+            for (let k = 0; k < len && i < N; k++, i++) {
+              if (cells[i] === FREE) cells[i] = DATA;
+            }
+            i += 1 + randInt(12);
+          }
+          for (let k = 0; k < 3; k++) cells[sysEnd + randInt(pinned * 2)] = BAD;
+          cursor = 0;
+          pending = null;
+        }
+
+        // Pack the next run of clusters into the earliest gap: find the first
+        // free cluster, then the first movable data past it. Unmovable and bad
+        // clusters are stepped over, never relocated.
+        function findMove() {
+          while (cursor < N && cells[cursor] !== FREE) cursor++;
+          if (cursor >= N) return null;
+          const dst = cursor;
+          let gap = 0;
+          while (dst + gap < N && cells[dst + gap] === FREE && gap < RUN_MAX) gap++;
+          let src = dst + gap;
+          while (src < N && cells[src] !== DATA) src++;
+          if (src >= N) return null; // nothing movable left: the drive is packed
+          let n = 0;
+          while (n < gap && src + n < N && cells[src + n] === DATA) n++;
+          return { src, dst, n };
+        }
+
+        // The head stays one step ahead of itself: each tick commits the run
+        // read on the last tick and marks the next one, so a red group is
+        // always sitting out in front of the green frontier.
+        function defragTick() {
+          if (pending) {
+            for (let k = 0; k < pending.n; k++) {
+              cells[pending.src + k] = FREE;
+              setMark(pending.src + k, READ, READ_TICKS);
+              cells[pending.dst + k] = DATA;
+              setMark(pending.dst + k, WRITE, WRITE_TICKS);
+            }
+            cursor = pending.dst + pending.n;
+            pending = null;
+          }
+          const move = findMove();
+          if (!move) {
+            phase = "hold";
+            phaseT = HOLD_TICKS;
+            return;
+          }
+          for (let k = 0; k < move.n; k++) setMark(move.src + k, READ, READ_TICKS);
+          pending = move;
+        }
+
+        // Delete a file: a hole wherever it happened to live.
+        function deleteRun(at, len) {
+          const start = Math.max(sysEnd, at);
+          let freed = 0;
+          for (let i = start; i < start + len && i < N; i++) {
+            if (cells[i] !== DATA) continue;
+            cells[i] = FREE;
+            setMark(i, READ, READ_TICKS);
+            freed++;
+          }
+          if (freed) cursor = Math.min(cursor, start);
+          return freed;
+        }
+
+        // Write one: first fit from wherever the head happens to be, taking
+        // each gap it passes. Small holes get the first pieces, the rest goes
+        // wherever it lands — which is exactly how a file ends up in fragments.
+        function writeFile(count) {
+          const at = sysEnd + randInt(Math.max(1, N - sysEnd));
+          let placed = 0;
+          for (let k = 0; k < N && placed < count; k++) {
+            const i = (at + k) % N;
+            if (i < sysEnd || cells[i] !== FREE) continue;
+            cells[i] = DATA;
+            setMark(i, WRITE, WRITE_TICKS);
+            cursor = Math.min(cursor, i);
+            placed++;
+          }
+        }
+
+        // Deletes and writes in equal measure, so the drive keeps the same
+        // amount of data and only loses its order. File sizes scale with the
+        // grid, so the churn looks the same on any screen.
+        function churnTick() {
+          if (Math.random() > 0.7) return;
+          const span = Math.max(6, Math.min(26, Math.round(N / 220)));
+          const at = sysEnd + randInt(Math.max(1, N - sysEnd));
+          writeFile(deleteRun(at, 4 + randInt(span)));
+        }
+
+        function tick() {
+          decayMarks();
+          if (phase === "defrag") {
+            defragTick();
+          } else if (phase === "hold") {
+            if (--phaseT <= 0) {
+              phase = "churn";
+              phaseT = CHURN_TICKS;
+            }
+          } else if (phase === "churn") {
+            churnTick();
+            if (--phaseT <= 0) {
+              phase = "defrag";
+              cursor = 0;
+            }
+          }
+        }
+
+        // The opening pass, before any of it moves: the map paints itself in
+        // reading order while the drive is analysed.
+        function analyze(now) {
+          const target = Math.round(Math.min(1, (now - startTime) / ANALYZE_MS) * N);
+          while (revealed < target) markDirty(revealed++);
+          if (revealed >= N) phase = "defrag";
+        }
+
+        function resize() {
+          const W = canvas.clientWidth;
+          const H = canvas.clientHeight;
+          canvas.width = Math.max(1, Math.round(W * dpr));
+          canvas.height = Math.max(1, Math.round(H * dpr));
+          // Hold the cluster size near the original's regardless of viewport,
+          // so a big window means more of the drive rather than bigger blocks.
+          COLS = Math.max(24, Math.min(100, Math.round(W / 15)));
+          ROWS = Math.max(8, Math.round(H / ((W / COLS) * 1.28)));
+          N = COLS * ROWS;
+          cellW = canvas.width / COLS;
+          cellH = canvas.height / ROWS;
+          gapX = Math.max(1, Math.round(2 * dpr));
+          gapY = Math.max(1, Math.round(3 * dpr));
+          bevel = Math.max(1, Math.round(dpr));
+          cells = new Uint8Array(N);
+          mark = new Uint8Array(N);
+          markT = new Uint8Array(N);
+          dirtyFlag = new Uint8Array(N);
+          dirty = [];
+          seedDisk();
+          revealed = 0;
+          phase = "analyze";
+          startTime = performance.now();
+          ctx.fillStyle = FIELD;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Reduced motion still gets the picture, just not the process: run the
+        // pass partway and hold it there, mid-defrag.
+        function fastForward() {
+          revealed = N;
+          phase = "defrag";
+          let guard = N * 6;
+          while (phase === "defrag" && cursor < N * 0.55 && guard-- > 0) defragTick();
+          pending = null;
+          mark.fill(0);
+          markT.fill(0);
+          repaintAll();
+        }
+
+        canvas.addEventListener("pointerdown", (e) => {
+          if (phase === "analyze") return;
+          const rect = canvas.getBoundingClientRect();
+          const c = Math.floor(((e.clientX - rect.left) / rect.width) * COLS);
+          const r = Math.floor(((e.clientY - rect.top) / rect.height) * ROWS);
+          if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return;
+          const len = 12 + randInt(40);
+          pending = null; // its source is about to be rewritten under it
+          deleteRun(r * COLS + c - (len >> 1), len);
+          phase = "defrag";
+        });
+
+        resize();
+        let resizeT = 0;
+        window.addEventListener("resize", () => {
+          clearTimeout(resizeT);
+          resizeT = setTimeout(() => {
+            resize();
+            if (reduced) fastForward();
+          }, 200);
+        });
+
+        if (reduced) {
+          fastForward();
+          return;
+        }
+
+        let raf = 0;
+        let last = performance.now();
+        let acc = 0;
+        function loop() {
+          const now = performance.now();
+          const dtMs = now - last;
+          last = now;
+          if (phase === "analyze") {
+            analyze(now);
+          } else {
+            acc += Math.min(200, dtMs);
+            while (acc >= STEP_MS) {
+              acc -= STEP_MS;
+              tick();
+            }
+          }
+          render();
+          raf = requestAnimationFrame(loop);
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") {
+            cancelAnimationFrame(raf);
+          } else {
+            last = performance.now();
+            acc = 0;
+            raf = requestAnimationFrame(loop);
+          }
+        });
+        raf = requestAnimationFrame(loop);
+      }
+
+      initDefrag(document.getElementById("scene"));
+    </script>
+  </body>
+</html>
