@@ -20,9 +20,17 @@
       seams are painted with a gold overlay whose width follows the distance to
       the nearest Voronoi boundary.
 
+      The glaze is generated too: colour, normal and roughness maps baked once
+      from noise, with crackle, throwing rings, iron specks and a bare clay
+      foot.
+
       Generated with Claude Code (Claude Opus 5).
     -->
     <style>
+      :root {
+        color-scheme: light;
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -33,7 +41,7 @@
         height: 100%;
         margin: 0;
         overflow: hidden;
-        background: radial-gradient(120% 90% at 50% 18%, #2a2119 0%, #17120d 55%, #0c0906 100%);
+        background: #fff;
       }
 
       canvas {
@@ -56,7 +64,7 @@
         font-size: 11px;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: rgb(240 224 196 / 0.55);
+        color: rgb(28 24 18 / 0.55);
         user-select: none;
       }
 
@@ -65,7 +73,7 @@
         appearance: none;
         width: min(48vw, 260px);
         height: 2px;
-        background: rgb(240 224 196 / 0.25);
+        background: rgb(28 24 18 / 0.2);
         border-radius: 2px;
         outline: none;
         cursor: pointer;
@@ -77,7 +85,7 @@
         width: 13px;
         height: 13px;
         border-radius: 50%;
-        background: #e7bd67;
+        background: #b8862b;
       }
 
       .controls input[type="range"]::-moz-range-thumb {
@@ -85,7 +93,7 @@
         height: 13px;
         border: none;
         border-radius: 50%;
-        background: #e7bd67;
+        background: #b8862b;
       }
 
       .hint {
@@ -99,7 +107,7 @@
         font-size: 10px;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: rgb(240 224 196 / 0.28);
+        color: rgb(28 24 18 / 0.3);
         user-select: none;
       }
     </style>
@@ -432,11 +440,11 @@
       // Colour
       // ---------------------------------------------------------------------
 
-      const glazeLight = new THREE.Color("#cbb896");
-      const glazeDark = new THREE.Color("#8a7654");
-      const glazeWarm = new THREE.Color("#a58a60");
-      const goldBase = new THREE.Color("#c9922e");
-      const goldBright = new THREE.Color("#f2d178");
+      const glazeLight = new THREE.Color("#b6a07a");
+      const glazeDark = new THREE.Color("#75633f");
+      const glazeWarm = new THREE.Color("#9a7f55");
+      const goldBase = new THREE.Color("#9a6a12");
+      const goldBright = new THREE.Color("#e0b04a");
       const scratch = new THREE.Color();
 
       function glazeColor(u, v, out) {
@@ -466,9 +474,9 @@
       // the opaque gold that fills the fracture walls, and a translucent gold
       // overlay that paints the seams onto the glaze.
       const shards = Array.from({ length: seeds.length }, () => ({
-        ceramic: { pos: [], nrm: [], col: [] },
-        gold: { pos: [], nrm: [], col: [] },
-        vein: { pos: [], nrm: [], col: [] },
+        ceramic: { pos: [], nrm: [], col: [], uv: [] },
+        gold: { pos: [], nrm: [], col: [], uv: [] },
+        vein: { pos: [], nrm: [], col: [], uv: [] },
       }));
 
       const eA = new THREE.Vector3();
@@ -477,7 +485,7 @@
 
       // Push a quad as two triangles, flipping the winding when the corners
       // wind against the intended facing direction.
-      function pushQuad(stream, p0, p1, p2, p3, normals, colors, facing) {
+      function pushQuad(stream, p0, p1, p2, p3, normals, colors, uvs, facing) {
         eA.set(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
         eB.set(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
         faceNormal.crossVectors(eA, eB);
@@ -489,6 +497,7 @@
           stream.nrm.push(normals[c][0], normals[c][1], normals[c][2]);
           const col = colors[c];
           stream.col.push(col[0], col[1], col[2], col.length > 3 ? col[3] : 1);
+          stream.uv.push(uvs[c][0], uvs[c][1]);
         }
       }
 
@@ -539,6 +548,7 @@
             outer[3],
             outN,
             glaze,
+            uv,
             facingScratch,
           );
           facingScratch.fromArray(inN[0]);
@@ -550,6 +560,7 @@
             inner[3],
             inN,
             glaze,
+            uv,
             facingScratch,
           );
 
@@ -581,6 +592,7 @@
               outerLift[3],
               outN,
               goldCols,
+              uv,
               facingScratch,
             );
             facingScratch.fromArray(inN[0]);
@@ -592,6 +604,7 @@
               innerLift[3],
               inN,
               goldCols,
+              uv,
               facingScratch,
             );
           }
@@ -628,16 +641,24 @@
             facingScratch.normalize();
 
             const wallN = [0, 1, 2, 3].map(() => facingScratch.toArray());
+            // Offsetting the inner pair keeps the texture from smearing across
+            // the depth of the wall.
+            const wallUv = [
+              uv[side.a],
+              uv[side.b],
+              [uv[side.b][0], uv[side.b][1] - 0.03],
+              [uv[side.a][0], uv[side.a][1] - 0.03],
+            ];
 
             if (isRim) {
               const rimCols = [glaze[side.a], glaze[side.b], glaze[side.b], glaze[side.a]];
-              pushQuad(shard.ceramic, p0, p1, p2, p3, wallN, rimCols, facingScratch);
+              pushQuad(shard.ceramic, p0, p1, p2, p3, wallN, rimCols, wallUv, facingScratch);
             } else {
               const goldCols = [side.a, side.b, side.b, side.a].map((n) => {
                 goldColor(uv[n][0], uv[n][1], scratch);
                 return [scratch.r, scratch.g, scratch.b, 1];
               });
-              pushQuad(shard.gold, p0, p1, p2, p3, wallN, goldCols, facingScratch);
+              pushQuad(shard.gold, p0, p1, p2, p3, wallN, goldCols, wallUv, facingScratch);
             }
           }
         }
@@ -651,7 +672,7 @@
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 0.8;
+      renderer.toneMappingExposure = 0.92;
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
@@ -661,36 +682,291 @@
       scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
       scene.environmentIntensity = 1.0;
 
-      const key = new THREE.DirectionalLight(0xfff2dc, 1.15);
+      const key = new THREE.DirectionalLight(0xfff6ea, 1.5);
       key.position.set(2.4, 3.4, 2.2);
       scene.add(key);
 
-      const rim = new THREE.DirectionalLight(0x9fb6d8, 0.45);
+      const rim = new THREE.DirectionalLight(0xdfe6f0, 0.4);
       rim.position.set(-2.6, 1.2, -2.2);
       scene.add(rim);
 
       // A soft light from the viewer's side, so the gold seams keep their
       // sheen even where the key light does not reach.
-      const fill = new THREE.DirectionalLight(0xffe6c4, 0.55);
+      const fill = new THREE.DirectionalLight(0xfff0da, 0.45);
       fill.position.set(0.6, 0.5, 3.2);
       scene.add(fill);
 
-      scene.add(new THREE.AmbientLight(0xd8c6a8, 0.18));
+      scene.add(new THREE.AmbientLight(0xf0e6d6, 0.22));
+
+      // ---------------------------------------------------------------------
+      // Glaze maps
+      // ---------------------------------------------------------------------
+
+      // The glaze is baked once into three maps: colour, height and roughness.
+      // Texture u runs around the bowl, so every pattern here is periodic in x;
+      // v runs from the foot to the rim, which is what leaves the foot as bare,
+      // unglazed clay while everything above it is glossy.
+      const TEX_W = 1536;
+      const TEX_H = 768;
+
+      function cellHash(ix, iy, cx, salt) {
+        const x = ((ix % cx) + cx) % cx;
+        let n = Math.imul(x, 374761393) + Math.imul(iy, 668265263) + Math.imul(salt, 2246822519);
+        n = Math.imul(n ^ (n >>> 13), 1274126177);
+        return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+      }
+
+      // Worley noise. The gap between the nearest and next-nearest of a
+      // jittered grid of points is near zero along the cell walls, which is
+      // exactly the crackle a raku glaze makes as it cools; the distance to the
+      // nearest point on its own gives round specks in the clay.
+      const cell = { first: 0, second: 0, id: 0 };
+
+      function worley(x, y, cx, cy, salt) {
+        const fx = x * cx;
+        const fy = y * cy;
+        const ix = Math.floor(fx);
+        const iy = Math.floor(fy);
+        let first = Infinity;
+        let second = Infinity;
+        let id = 0;
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const gx = ix + ox;
+            const gy = iy + oy;
+            const dx = gx + cellHash(gx, gy, cx, salt) - fx;
+            const dy = gy + cellHash(gx, gy, cx, salt + 7) - fy;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < first) {
+              second = first;
+              first = d;
+              id = cellHash(gx, gy, cx, salt + 19);
+            } else if (d < second) {
+              second = d;
+            }
+          }
+        }
+        cell.first = first;
+        cell.second = second;
+        cell.id = id;
+        return cell;
+      }
+
+      function fbm(x, y) {
+        return (
+          0.5 * noise2(x, y) +
+          0.28 * noise2(x * 2, y * 2 + 0.31) +
+          0.14 * noise2(x * 4, y * 4 + 0.77) +
+          0.08 * noise2(x * 8, y * 8 + 0.13)
+        );
+      }
+
+      function buildGlazeMaps() {
+        const colour = new ImageData(TEX_W, TEX_H);
+        const height = new ImageData(TEX_W, TEX_H);
+        const rough = new ImageData(TEX_W, TEX_H);
+
+        for (let py = 0; py < TEX_H; py++) {
+          const v = py / (TEX_H - 1);
+          // Bare clay across the foot, glaze everywhere above it, with the
+          // glaze thinning slightly as it climbs toward the lip.
+          const glazed = smoothstep((v - 0.04) / 0.06);
+          for (let px = 0; px < TEX_W; px++) {
+            const u = px / TEX_W;
+
+            // Large, soft variation first: this is what carries the look of
+            // a hand-glazed pot. Everything below only breaks it up.
+            const broad = fbm(u * 0.6 + 0.2, v * 0.45);
+            const mottle = fbm(u * 1.6, v * 1.1 + 0.4);
+
+            // Glaze runs thin over the lip and pools toward the foot, so the
+            // rim reads lighter and warmer where the clay shows through.
+            const pooling = smoothstep(1.25 - v * 1.5) * (0.6 + 0.5 * broad);
+            const thin = smoothstep((v - 0.72) / 0.28);
+
+            // A kiln blush: one side of the pot caught more flame than the rest.
+            const blush = smoothstep(Math.cos((u - 0.18) * TAU) * 0.9 + 0.15) * (0.35 + broad);
+
+            // Crazing. Warping the lookup makes the cell walls wander, which is
+            // the difference between a crackle glaze and a Voronoi diagram.
+            const wx =
+              u +
+              0.006 * (noise2(u * 3, v * 2.2) - 0.5) +
+              0.004 * (noise2(u * 7 + 0.4, v * 5.5) - 0.5) +
+              0.002 * (noise2(u * 14 + 0.9, v * 11) - 0.5);
+            const wy =
+              v +
+              0.006 * (noise2(u * 2.6 + 0.6, v * 2.4) - 0.5) +
+              0.004 * (noise2(u * 6 + 0.2, v * 6.1) - 0.5) +
+              0.002 * (noise2(u * 13 + 0.3, v * 12) - 0.5);
+            // Hairline width: the gap grows at roughly twice the distance from
+            // a cell wall, so the threshold is about the width of the line.
+            const width = 0.045 + 0.03 * mottle;
+            const coarseCell = worley(wx, wy, 56, 40, 3);
+            const coarse = 1 - smoothstep((coarseCell.second - coarseCell.first) / width);
+            const fineCell = worley(wx, wy, 132, 96, 11);
+            const fine =
+              (1 - smoothstep((fineCell.second - fineCell.first) / (width * 0.7))) *
+              smoothstep(broad * 1.9 - 0.5);
+            // Crazing is never even: some stretches of glaze stay almost clear.
+            const crazeMask = 0.25 + 0.95 * smoothstep(broad * 1.7 - 0.25);
+            const craze =
+              glazed * Math.min(1, coarse + 0.4 * fine) * (0.45 + 0.75 * pooling) * crazeMask;
+
+            // Orange peel: the fine grain of a glaze that never quite levelled.
+            const grain = noise2(u * 26, v * 19) - 0.5;
+
+            // Throwing rings: faint ridges left by the wheel, strongest on the
+            // upper wall where the potter's fingers ran.
+            const rings =
+              Math.sin(v * 58 + broad * 6 + Math.sin(u * TAU + broad * 4) * 0.9) * 0.5 + 0.5;
+            const ringDepth = rings * glazed * smoothstep(v * 2.4) * (0.5 + 0.6 * mottle);
+
+            // Iron specks in the clay body, showing through the glaze.
+            const dots = worley(u, v, 230, 180, 23);
+            const speck =
+              dots.id > 0.82 ? 1 - smoothstep(dots.first / (0.1 + 0.2 * (dots.id - 0.82))) : 0;
+
+            // Colour: pale cream where the glaze is thin, warmer sand where it
+            // pooled, then stained along the crazing and over the specks.
+            const warmth = Math.min(1, 0.4 * pooling + 0.5 * blush + 0.35 * mottle);
+            let r = lerp(1.03, 1.08, warmth) + 0.06 * (mottle - 0.5);
+            let g = lerp(1.01, 0.97, warmth) + 0.05 * (mottle - 0.5);
+            let b = lerp(1.0, 0.86, warmth) + 0.04 * (mottle - 0.5);
+
+            r *= 1 - 0.14 * craze;
+            g *= 1 - 0.2 * craze;
+            b *= 1 - 0.3 * craze;
+
+            r *= 1 + 0.03 * grain;
+            g *= 1 + 0.03 * grain;
+            b *= 1 + 0.028 * grain;
+
+            const dirt = 0.4 * speck;
+            r *= 1 - dirt * 0.45;
+            g *= 1 - dirt * 0.58;
+            b *= 1 - dirt * 0.68;
+
+            r *= 1 - 0.045 * ringDepth;
+            g *= 1 - 0.05 * ringDepth;
+            b *= 1 - 0.05 * ringDepth;
+
+            // Thin glaze near the lip lets the warmer clay body read through.
+            r = lerp(r, r * 1.02, thin);
+            g = lerp(g, g * 0.98, thin);
+            b = lerp(b, b * 0.93, thin);
+
+            // The unglazed foot is drier, darker and warmer than the glaze.
+            const bare = 1 - glazed;
+            r = lerp(r, r * 0.9, bare);
+            g = lerp(g, g * 0.84, bare);
+            b = lerp(b, b * 0.77, bare);
+
+            const h =
+              0.55 +
+              0.09 * (mottle - 0.5) +
+              0.16 * (ringDepth - 0.5) +
+              0.06 * grain -
+              0.3 * craze +
+              0.09 * speck -
+              0.08 * bare;
+
+            // Satin glaze, rougher along the crazing, over the specks, where
+            // the glaze runs thin, and on the bare clay of the foot.
+            const rg = lerp(
+              lerp(0.22, 0.34, mottle) +
+                0.09 * grain +
+                0.28 * craze +
+                0.18 * speck +
+                0.05 * ringDepth +
+                0.12 * thin,
+              0.82,
+              bare,
+            );
+
+            const k = (py * TEX_W + px) * 4;
+            colour.data[k] = Math.min(255, r * 255);
+            colour.data[k + 1] = Math.min(255, g * 255);
+            colour.data[k + 2] = Math.min(255, b * 255);
+            colour.data[k + 3] = 255;
+
+            const hb = Math.max(0, Math.min(255, h * 255));
+            height.data[k] = hb;
+            height.data[k + 1] = hb;
+            height.data[k + 2] = hb;
+            height.data[k + 3] = 255;
+
+            const rb = Math.max(0, Math.min(255, rg * 255));
+            rough.data[k] = rb;
+            rough.data[k + 1] = rb;
+            rough.data[k + 2] = rb;
+            rough.data[k + 3] = 255;
+          }
+        }
+
+        // A bump map is easy to lose under a clearcoat, so turn the height
+        // field into a normal map and hand the same map to both layers.
+        const normal = new ImageData(TEX_W, TEX_H);
+        const heightAt = (x, y) => {
+          const cx = ((x % TEX_W) + TEX_W) % TEX_W;
+          const cy = Math.max(0, Math.min(TEX_H - 1, y));
+          return height.data[(cy * TEX_W + cx) * 4] / 255;
+        };
+        const relief = 5;
+        for (let py = 0; py < TEX_H; py++) {
+          for (let px = 0; px < TEX_W; px++) {
+            const dx = (heightAt(px + 1, py) - heightAt(px - 1, py)) * relief;
+            const dy = (heightAt(px, py + 1) - heightAt(px, py - 1)) * relief;
+            const len = Math.sqrt(dx * dx + dy * dy + 1);
+            const k = (py * TEX_W + px) * 4;
+            normal.data[k] = (-dx / len) * 127.5 + 127.5;
+            normal.data[k + 1] = (-dy / len) * 127.5 + 127.5;
+            normal.data[k + 2] = (1 / len) * 127.5 + 127.5;
+            normal.data[k + 3] = 255;
+          }
+        }
+
+        return [colour, normal, rough].map((data, n) => {
+          const target = document.createElement("canvas");
+          target.width = TEX_W;
+          target.height = TEX_H;
+          target.getContext("2d").putImageData(data, 0, 0);
+          const texture = new THREE.CanvasTexture(target);
+          // The maps are written top row first, matching v = 0 at the foot.
+          texture.flipY = false;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          if (n === 0) texture.colorSpace = THREE.SRGBColorSpace;
+          return texture;
+        });
+      }
+
+      const [glazeMap, glazeNormal, glazeRoughness] = buildGlazeMaps();
 
       const ceramicMaterial = new THREE.MeshPhysicalMaterial({
         vertexColors: true,
-        roughness: 0.52,
+        map: glazeMap,
+        normalMap: glazeNormal,
+        normalScale: new THREE.Vector2(0.55, 0.55),
+        roughnessMap: glazeRoughness,
+        roughness: 1.0,
         metalness: 0.0,
-        clearcoat: 0.35,
-        clearcoatRoughness: 0.35,
-        envMapIntensity: 0.32,
+        // A thin glassy layer over the clay, which is what a glaze is.
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.2,
+        clearcoatNormalMap: glazeNormal,
+        clearcoatNormalScale: new THREE.Vector2(0.3, 0.3),
+        envMapIntensity: 0.55,
       });
 
       const goldMaterial = new THREE.MeshStandardMaterial({
         vertexColors: true,
         metalness: 1.0,
-        roughness: 0.3,
-        envMapIntensity: 2.2,
+        roughness: 0.34,
+        normalMap: glazeNormal,
+        normalScale: new THREE.Vector2(0.35, 0.35),
+        envMapIntensity: 0.85,
         // Snapping vertices onto the crack leaves the odd sliver of wall wound
         // the other way round, so draw both faces.
         side: THREE.DoubleSide,
@@ -699,8 +975,10 @@
       const veinMaterial = new THREE.MeshStandardMaterial({
         vertexColors: true,
         metalness: 1.0,
-        roughness: 0.22,
-        envMapIntensity: 2.2,
+        roughness: 0.26,
+        normalMap: glazeNormal,
+        normalScale: new THREE.Vector2(0.4, 0.4),
+        envMapIntensity: 0.85,
         transparent: true,
         depthWrite: false,
       });
@@ -714,6 +992,7 @@
         );
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(stream.nrm), 3));
         geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(stream.col), 4));
+        geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(stream.uv), 2));
         return new THREE.Mesh(geometry, material);
       }
 
